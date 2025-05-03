@@ -1,0 +1,31 @@
+name: Tests
+
+on:
+  push:
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        zig-version: [0.14.0, master]
+
+    name: Ubuntu / Zig ${{ matrix.zig-version }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Zig
+        uses: mlugg/setup-zig@main
+        with:
+          version: ${{ matrix.zig-version }}
+
+      - name: Build library
+        run: zig build
+
+      - name: Run tests
+        run: zig build test --summary all
+
+      - name: Check formatting
+        run: zig fmt --check .
