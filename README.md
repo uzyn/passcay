@@ -1,12 +1,12 @@
 # Passcay
+[![Tests](https://github.com/uzyn/passcay/actions/workflows/test.yml/badge.svg)](https://github.com/uzyn/passcay/actions/workflows/test.yml)
 
 ![Passcay Logo](docs/passcay-logo.png)
 
 
-[![Tests](https://github.com/uzyn/passcay/actions/workflows/test.yml/badge.svg)](https://github.com/uzyn/passcay/actions/workflows/test.yml)
-
-
 **Minimal**, **fast** and **secure** Passkey (WebAuthn) relying party (RP) library for Zig.
+
+Supports both Zig stable 0.14+ and nightly (0.15+).
 
 ## Features
 
@@ -18,11 +18,9 @@
 
 ## Dependencies
 
-Compiles and tested on both Zig stable 0.14+ and nightly (0.15+).
+Dynamically linked to operating system's OpenSSL for crypto verification.
 
-Dynamically linked to system's OpenSSL for crypto verification.
-
-Works on Linux and macOS. Not yet on Windows.
+Works on Linux and macOS. Not on Windows due to OpenSSL dependency.
 
 ### Installation
 
@@ -54,7 +52,6 @@ zig build
 zig build test --summary all
 ```
 
-
 ## Usage
 
 ### Registration
@@ -64,13 +61,13 @@ const passcay = @import("passcay");
 
 const input = passcay.register.RegVerifyInput{
      .attestation_object = attestation_object,
-     .client_data_json   = client_data_json,
+     .client_data_json = client_data_json,
 };
 
 const expectations = passcay.register.RegVerifyExpectations{
-     .challenge               = challenge,
-     .origin                  = "https://example.com",
-     .rp_id                   = "example.com",
+     .challenge = challenge,
+     .origin = "https://example.com",
+     .rp_id = "example.com",
      .require_user_verification = true,
 };
 
