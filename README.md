@@ -1,4 +1,7 @@
-# passcay
+# Passcay
+
+![Passcay Logo](docs/passcay-logo.png)
+
 
 [![Tests](https://github.com/uzyn/passcay/actions/workflows/test.yml/badge.svg)](https://github.com/uzyn/passcay/actions/workflows/test.yml)
 
@@ -172,12 +175,12 @@ function bufferToBase64Url(buf) {
 
 </details>
 
-## Demo
+## Docs
 
-Reference implementations for integrating passcay into your application:
+Reference implementations for integrating Passcay into your application:
 
-- `demo/register.md` - Registration flow with challenge generation
-- `demo/login.md` - Authentication flow with verification
+- `docs/register.md` - Registration flow with challenge generation
+- `docs/login.md` - Authentication flow with verification
 
 ## See also
 
