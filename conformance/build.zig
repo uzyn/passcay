@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    
+
     const httpz = b.dependency("httpz", .{
         .target = target,
         .optimize = optimize,

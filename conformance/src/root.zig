@@ -1,6 +1,6 @@
 //! FIDO2 Conformance Server Library
-//! 
-//! This module contains shared types and utilities for the FIDO2 
+//!
+//! This module contains shared types and utilities for the FIDO2
 //! conformance test server.
 
 const std = @import("std");
@@ -181,7 +181,7 @@ pub fn jsonParse(comptime T: type, allocator: std.mem.Allocator, input: []const 
 test "basic ServerResponse functionality" {
     try testing.expectEqualStrings("ok", ServerResponse.success().status);
     try testing.expectEqualStrings("", ServerResponse.success().errorMessage);
-    
+
     const err_response = ServerResponse.failure("Test error");
     try testing.expectEqualStrings("failed", err_response.status);
     try testing.expectEqualStrings("Test error", err_response.errorMessage);
