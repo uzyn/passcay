@@ -2,3 +2,6 @@
 zig-out/
 .zig-cache/
 /ref-*
+CLAUDE.md
+copilot-instructions.md
+codex.md
