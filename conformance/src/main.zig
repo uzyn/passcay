@@ -472,6 +472,34 @@ fn handleAttestationOptionsRoute(request: *httpz.Request, response: *httpz.Respo
     // Store the challenge in a local variable for direct reference
     std.debug.print("Challenge before JSON formatting: {s}\n", .{options.challenge});
 
+    // Note: We're not using default_authenticator_selection variable, 
+    // but directly including the JSON structure in the template
+
+    // Determine authenticator selection values from request
+    var resident_key: []const u8 = "preferred";
+    var require_resident_key = false;
+    var user_verification: []const u8 = "preferred";
+    
+    if (req_options.value.authenticatorSelection) |auth_selection| {
+        if (auth_selection.residentKey) |rk| {
+            // Need to duplicate string to avoid type issues
+            resident_key = rk;
+        }
+        if (auth_selection.requireResidentKey) |rrk| {
+            require_resident_key = rrk;
+        }
+        if (auth_selection.userVerification) |uv| {
+            user_verification = uv;
+        }
+    }
+    
+    // Log the raw request body to see actual request
+    std.debug.print("Raw request body: {s}\n", .{body});
+    
+    // Debug log
+    std.debug.print("Using authenticatorSelection: residentKey={s}, requireResidentKey={}, userVerification={s}\n", 
+        .{resident_key, require_resident_key, user_verification});
+
     const json_response = try std.fmt.allocPrint(global_allocator,
         \\{{
         \\  "status": "ok",
@@ -492,7 +520,15 @@ fn handleAttestationOptionsRoute(request: *httpz.Request, response: *httpz.Respo
         \\  ],
         \\  "timeout": {d},
         \\  "excludeCredentials": [],
-        \\  "attestation": "{s}"
+        \\  "authenticatorSelection": {{
+        \\    "residentKey": "{s}",
+        \\    "requireResidentKey": {any},
+        \\    "userVerification": "{s}"
+        \\  }},
+        \\  "attestation": "{s}",
+        \\  "extensions": {{
+        \\    "example.extension.bool": true
+        \\  }}
         \\}}
     , .{
         default_rp_name,
@@ -502,6 +538,9 @@ fn handleAttestationOptionsRoute(request: *httpz.Request, response: *httpz.Respo
         options.user.displayName,
         options.challenge,
         default_timeout,
+        resident_key,
+        require_resident_key, // Now using {bool} format specifier
+        user_verification,
         attestation_value, // Use the requested attestation value
     });
 

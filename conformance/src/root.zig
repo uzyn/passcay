@@ -71,6 +71,7 @@ pub const AuthenticatorSelectionCriteria = struct {
 
 pub const AuthenticationExtensionsClientInputs = struct {
     credProps: ?bool = null,
+    example_extension_bool: ?bool = null,
 };
 
 // Registration types
