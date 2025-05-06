@@ -623,7 +623,7 @@ fn handleAttestationResultRoute(request: *httpz.Request, response: *httpz.Respon
         response.status = 400; // Bad Request
         response.content_type = httpz.ContentType.JSON;
         var json_output = std.ArrayList(u8).init(global_allocator);
-        defer json_output.deinit();
+        // defer json_output.deinit();
         try std.json.stringify(lib.ServerResponse.failure("Invalid JSON format"), .{}, json_output.writer());
         response.body = json_output.items;
         return;
@@ -683,7 +683,7 @@ fn handleAttestationResultRoute(request: *httpz.Request, response: *httpz.Respon
         response.status = 400; // Bad Request
         response.content_type = httpz.ContentType.JSON;
         var json_output = std.ArrayList(u8).init(global_allocator);
-        defer json_output.deinit();
+        // defer json_output.deinit();
         try std.json.stringify(lib.ServerResponse.failure(@errorName(err)), .{}, json_output.writer());
         response.body = json_output.items;
         return;
@@ -733,9 +733,11 @@ fn handleAttestationResultRoute(request: *httpz.Request, response: *httpz.Respon
     response.content_type = httpz.ContentType.JSON;
     response.status = 200; // Always OK for conformance test
     var json_output = std.ArrayList(u8).init(global_allocator);
-    errdefer json_output.deinit();
+    defer json_output.deinit();
     try std.json.stringify(lib.ServerResponse.success(), .{}, json_output.writer());
-    response.body = json_output.items;
+
+    // Make sure we create a copy of the JSON data that will persist after the function returns
+    response.body = try global_allocator.dupe(u8, json_output.items);
 }
 
 // Route handler for assertion/options (authentication start)
@@ -943,7 +945,9 @@ fn handleAssertionResultRoute(request: *httpz.Request, response: *httpz.Response
     var json_output = std.ArrayList(u8).init(global_allocator);
     defer json_output.deinit();
     try std.json.stringify(lib.ServerResponse.success(), .{}, json_output.writer());
-    response.body = json_output.items;
+
+    // Make sure we create a copy of the JSON data that will persist after the function returns
+    response.body = try global_allocator.dupe(u8, json_output.items);
 }
 
 // Core implementation functions
