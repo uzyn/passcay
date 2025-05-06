@@ -79,6 +79,7 @@ pub const ServerPublicKeyCredentialCreationOptionsRequest = struct {
     displayName: []const u8,
     authenticatorSelection: ?AuthenticatorSelectionCriteria = null,
     attestation: ?[]const u8 = null,
+    extensions: ?AuthenticationExtensionsClientInputs = null,
 };
 
 pub const ServerPublicKeyCredentialCreationOptionsResponse = struct {
