@@ -89,6 +89,7 @@ const auth_expectations = passcay.auth.AuthVerifyExpectations{
     .require_user_presence = true,             // Whether user presence is required
     .enable_sign_count_check = true,           // Enable sign count checking if applicable
     .known_sign_count = user_credential.sign_count,  // Current sign count from database
+    .sign_count_allowance = 1,                 // Allow some deviation in sign count for eventual consistency
 };
 
 // Perform verification. It returns error if verification fails
@@ -99,5 +100,22 @@ defer auth_result.deinit(allocator);
 // Note: Many authenticators do not increment sign count, this is normal
 user_credential.sign_count = auth_result.recommended_sign_count;
 ```
+
+## Sign count allowance
+
+The `.sign_count_allowance` field is particularly useful for passkey providers that use eventual consistency for syncing sign counts across multiple devices or authenticators. This is common with cloud-based passkey providers where the sign count might not be immediately synchronized across all instances of a key.
+
+### Example with higher allowance:
+
+```zig
+const auth_expectations = passcay.auth.AuthVerifyExpectations{
+    // ... other fields ...
+    .enable_sign_count_check = true,
+    .known_sign_count = user_credential.sign_count,
+    .sign_count_allowance = 5,  // Allow up to 5 count deviation for cloud-synced passkeys
+};
+```
+
+**Important**: While a higher allowance accommodates legitimate sync delays, it also slightly reduces replay attack protection. Choose an allowance value that balances usability with security based on your threat model.
 
 Once verification succeeds, the user has been successfully authenticated with their passkey.
