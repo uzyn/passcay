@@ -419,8 +419,8 @@ test "memory safety in signature verification" {
     {
         // Invalid CBOR test
         const invalid_cbor = "invalidCBORdataNotBase64";
-        const dummy_sig = [_]u8{0} ** 64;
-        const dummy_data = [_]u8{0} ** 32;
+        const dummy_sig = std.mem.zeroes([64]u8);
+        const dummy_data = std.mem.zeroes([32]u8);
 
         // This should not crash, but return an error
         const result = verifySignature(allocator, invalid_cbor, &dummy_sig, &dummy_data);

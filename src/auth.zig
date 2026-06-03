@@ -317,7 +317,7 @@ test "verify with explicit challenge" {
     defer allocator.free(client_data_json);
 
     // Create basic auth data with user presence flag
-    var auth_data_bytes = [_]u8{0} ** 37;
+    var auth_data_bytes = std.mem.zeroes([37]u8);
     var rp_id_hash: [32]u8 = undefined;
     crypto.sha256("localhost", &rp_id_hash, .{});
     @memcpy(auth_data_bytes[0..32], &rp_id_hash);
@@ -407,7 +407,7 @@ test "verify with memory leak detection" {
 
     const challenge = parsed_data.value.object.get("challenge").?.string;
 
-    var auth_data_bytes = [_]u8{0} ** 50;
+    var auth_data_bytes = std.mem.zeroes([50]u8);
     var rp_id_hash: [32]u8 = undefined;
     crypto.sha256("localhost", &rp_id_hash, .{});
     @memcpy(auth_data_bytes[0..32], &rp_id_hash);
@@ -637,7 +637,7 @@ test "parseAuthenticatorData with credential data flag" {
     const testing = std.testing;
     const allocator = testing.allocator;
 
-    var auth_data = [_]u8{0} ** 50; // Extended size
+    var auth_data = std.mem.zeroes([50]u8); // Extended size
     var rp_id_hash: [32]u8 = undefined;
     crypto.sha256("example.com", &rp_id_hash, .{});
     @memcpy(auth_data[0..32], &rp_id_hash);
@@ -655,7 +655,7 @@ test "parseAuthenticatorData basic flags" {
     const testing = std.testing;
     const allocator = testing.allocator;
 
-    var auth_data = [_]u8{0} ** 37; // Minimum length
+    var auth_data = std.mem.zeroes([37]u8); // Minimum length
     var rp_id_hash: [32]u8 = undefined;
     crypto.sha256("example.com", &rp_id_hash, .{});
     @memcpy(auth_data[0..32], &rp_id_hash);
@@ -673,7 +673,7 @@ test "extension data flag detection" {
     const testing = std.testing;
     const allocator = testing.allocator;
 
-    var auth_data = [_]u8{0} ** 50;
+    var auth_data = std.mem.zeroes([50]u8);
     var rp_id_hash: [32]u8 = undefined;
     crypto.sha256("localhost", &rp_id_hash, .{});
     @memcpy(auth_data[0..32], &rp_id_hash);
@@ -743,7 +743,7 @@ test "verify skipping user presence verification" {
     const allocator = testing.allocator;
 
     // Create auth data with user verification flag but NO user presence flag
-    var auth_data_bytes = [_]u8{0} ** 37; // Standard size
+    var auth_data_bytes = std.mem.zeroes([37]u8); // Standard size
     var rp_id_hash: [32]u8 = undefined;
     crypto.sha256("localhost", &rp_id_hash, .{});
     @memcpy(auth_data_bytes[0..32], &rp_id_hash);
