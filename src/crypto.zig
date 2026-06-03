@@ -15,14 +15,6 @@ const passcay = @import("root.zig");
 const types = passcay.types;
 const util = passcay.util;
 
-const c = @import("c");
-
-/// Initialize OpenSSL libraries - must be called before any crypto operations
-pub fn initOpenSSL() !void {
-    // Initialize OpenSSL libraries with only the essential calls
-    _ = c.OPENSSL_init_ssl(0, null);
-}
-
 /// Compute the SHA-256 hash of a message
 /// For backward compatibility with existing code
 pub fn sha256(data: []const u8, out: *[32]u8, _: anytype) void {
@@ -63,100 +55,8 @@ pub fn getAlgorithm(key_bytes: []const u8) !CoseAlg {
     return VerifyError.UnsupportedAlgorithm;
 }
 
-/// Unwrap EC2 signature from ASN.1 DER format to raw format
-/// Returns a pair of r and s values concatenated
-fn unwrapEC2Signature(allocator: Allocator, signature: []const u8) ![]u8 {
-    if (signature.len < 8) return VerifyError.InvalidSignature;
-    if (signature[0] != 0x30) return VerifyError.InvalidSignature; // SEQUENCE
-
-    const seq_len: usize = @as(usize, signature[1]);
-    // Add 2 (for tag and length) but guard against overflow
-    if (seq_len > signature.len or 2 > signature.len - seq_len) return VerifyError.InvalidSignature;
-
-    var idx: usize = 2;
-
-    if (idx >= signature.len) return VerifyError.InvalidSignature;
-    if (signature[idx] != 0x02) return VerifyError.InvalidSignature; // INTEGER
-    idx += 1;
-
-    if (idx >= signature.len) return VerifyError.InvalidSignature;
-    const r_len = signature[idx];
-    idx += 1;
-
-    if (idx + r_len > signature.len) return VerifyError.InvalidSignature;
-    var r_start: usize = idx;
-    var r_trimmed_len = r_len;
-
-    while (r_trimmed_len > 0 and signature[r_start] == 0) {
-        r_start += 1;
-        r_trimmed_len -= 1;
-    }
-
-    idx += r_len;
-
-    if (idx >= signature.len) return VerifyError.InvalidSignature;
-    if (signature[idx] != 0x02) return VerifyError.InvalidSignature; // INTEGER
-    idx += 1;
-
-    if (idx >= signature.len) return VerifyError.InvalidSignature;
-    const s_len = signature[idx];
-    idx += 1;
-
-    if (idx + s_len > signature.len) return VerifyError.InvalidSignature;
-    var s_start: usize = idx;
-    var s_trimmed_len = s_len;
-    while (s_trimmed_len > 0 and signature[s_start] == 0) {
-        s_start += 1;
-        s_trimmed_len -= 1;
-    }
-
-    // P-256 curve always uses 32 bytes per component
-    const component_len: usize = 32;
-
-    const raw_sig = try allocator.alloc(u8, component_len * 2);
-    errdefer allocator.free(raw_sig);
-    @memset(raw_sig, 0);
-
-    if (r_trimmed_len <= component_len) {
-        if (r_trimmed_len > component_len) return VerifyError.InvalidSignature;
-        const r_offset = component_len - r_trimmed_len;
-
-        if (r_trimmed_len > 0 and r_start > signature.len - r_trimmed_len) return VerifyError.InvalidSignature;
-        if (r_offset > component_len) return VerifyError.InvalidSignature;
-
-        @memcpy(raw_sig[r_offset..component_len], signature[r_start .. r_start + r_trimmed_len]);
-    } else {
-        if (r_trimmed_len < component_len) return VerifyError.InvalidSignature;
-
-        if (r_trimmed_len > signature.len - r_start) return VerifyError.InvalidSignature;
-        if (r_start + r_trimmed_len - component_len > r_start + r_trimmed_len) return VerifyError.InvalidSignature;
-
-        @memcpy(raw_sig[0..component_len], signature[r_start + r_trimmed_len - component_len .. r_start + r_trimmed_len]);
-    }
-
-    if (s_trimmed_len <= component_len) {
-        if (s_trimmed_len > component_len) return VerifyError.InvalidSignature;
-        const s_offset = component_len - s_trimmed_len;
-
-        if (s_trimmed_len > 0 and s_start > signature.len - s_trimmed_len) return VerifyError.InvalidSignature;
-        if (component_len + s_offset > raw_sig.len) return VerifyError.InvalidSignature;
-
-        @memcpy(raw_sig[component_len + s_offset ..], signature[s_start .. s_start + s_trimmed_len]);
-    } else {
-        if (s_trimmed_len < component_len) return VerifyError.InvalidSignature;
-
-        if (s_trimmed_len > signature.len - s_start) return VerifyError.InvalidSignature;
-        if (s_start + s_trimmed_len - component_len > s_start + s_trimmed_len) return VerifyError.InvalidSignature;
-        if (component_len * 2 > raw_sig.len) return VerifyError.InvalidSignature;
-
-        @memcpy(raw_sig[component_len..], signature[s_start + s_trimmed_len - component_len .. s_start + s_trimmed_len]);
-    }
-
-    return raw_sig;
-}
-
 /// Verify a signature using ES256 algorithm (ECDSA with P-256 curve and SHA-256)
-fn verifyES256(allocator: Allocator, public_key_bytes: []const u8, data: []const u8, signature: []const u8) !bool {
+fn verifyES256(_: Allocator, public_key_bytes: []const u8, data: []const u8, signature: []const u8) !bool {
     var data_item = try cbor.DataItem.new(public_key_bytes);
 
     if (data_item.getType() != .Map) {
@@ -189,92 +89,25 @@ fn verifyES256(allocator: Allocator, public_key_bytes: []const u8, data: []const
         return VerifyError.MissingKeyComponent;
     }
 
-    const x_bytes_unwrapped = x_bytes.?;
-    const y_bytes_unwrapped = y_bytes.?;
+    const Ecdsa = crypto.sign.ecdsa.EcdsaP256Sha256;
+    const coord_len = 32;
 
-    // Create an OpenSSL EC_KEY
-    const ec_key = c.EC_KEY_new_by_curve_name(c.NID_X9_62_prime256v1) orelse
-        return VerifyError.LibraryError;
-    defer c.EC_KEY_free(ec_key);
-
-    // Set the x and y coordinates
-    const ec_group = c.EC_KEY_get0_group(ec_key);
-    const ec_point = c.EC_POINT_new(ec_group) orelse
-        return VerifyError.LibraryError;
-    defer c.EC_POINT_free(ec_point);
-
-    // Convert x and y bytes to BIGNUM
-    const bn_ctx = c.BN_CTX_new() orelse
-        return VerifyError.LibraryError;
-    defer c.BN_CTX_free(bn_ctx);
-
-    const bn_x = c.BN_bin2bn(x_bytes_unwrapped.ptr, @intCast(x_bytes_unwrapped.len), null) orelse
-        return VerifyError.LibraryError;
-    defer c.BN_free(bn_x);
-
-    const bn_y = c.BN_bin2bn(y_bytes_unwrapped.ptr, @intCast(y_bytes_unwrapped.len), null) orelse
-        return VerifyError.LibraryError;
-    defer c.BN_free(bn_y);
-
-    if (c.EC_POINT_set_affine_coordinates(ec_group, ec_point, bn_x, bn_y, bn_ctx) != 1) {
+    if (x_bytes.?.len > coord_len or y_bytes.?.len > coord_len) {
         return VerifyError.InvalidPublicKey;
     }
 
-    if (c.EC_KEY_set_public_key(ec_key, ec_point) != 1) {
-        return VerifyError.InvalidPublicKey;
-    }
+    // SEC1 uncompressed point: 0x04 || x || y, left-padding each coordinate to
+    // 32 bytes (COSE normally provides exactly 32).
+    var sec1: [1 + 2 * coord_len]u8 = undefined;
+    sec1[0] = 0x04;
+    @memset(sec1[1..], 0);
+    @memcpy(sec1[1 + coord_len - x_bytes.?.len .. 1 + coord_len], x_bytes.?);
+    @memcpy(sec1[1 + 2 * coord_len - y_bytes.?.len ..], y_bytes.?);
 
-    const raw_sig = try unwrapEC2Signature(allocator, signature);
-    defer allocator.free(raw_sig);
-
-    const sig = c.ECDSA_SIG_new() orelse
-        return VerifyError.LibraryError;
-    defer c.ECDSA_SIG_free(sig);
-
-    if (raw_sig.len < 2) {
-        return VerifyError.InvalidSignature;
-    }
-
-    const half_len = raw_sig.len / 2;
-
-    var r_ptr: ?*c.BIGNUM = null;
-    var s_ptr: ?*c.BIGNUM = null;
-
-    r_ptr = c.BN_bin2bn(raw_sig.ptr, @intCast(half_len), null) orelse
-        return VerifyError.LibraryError;
-    errdefer if (r_ptr) |ptr| c.BN_free(ptr);
-
-    s_ptr = c.BN_bin2bn(raw_sig.ptr + half_len, @intCast(half_len), null) orelse {
-        if (r_ptr) |ptr| c.BN_free(ptr);
-        return VerifyError.LibraryError;
-    };
-    errdefer if (s_ptr) |ptr| c.BN_free(ptr);
-
-    if (r_ptr != null and s_ptr != null) {
-        if (c.ECDSA_SIG_set0(sig, r_ptr.?, s_ptr.?) != 1) {
-            c.BN_free(r_ptr.?);
-            c.BN_free(s_ptr.?);
-            return VerifyError.LibraryError;
-        }
-    } else {
-        return VerifyError.LibraryError;
-    }
-
-    var digest: [32]u8 = undefined;
-    std.crypto.hash.sha2.Sha256.hash(data, &digest, .{});
-
-    const result = c.ECDSA_do_verify(
-        &digest,
-        @intCast(digest.len),
-        sig,
-        ec_key,
-    );
-
-    if (result == -1) {
-        return VerifyError.LibraryError;
-    }
-
-    return result == 1;
+    const pk = Ecdsa.PublicKey.fromSec1(&sec1) catch return VerifyError.InvalidPublicKey;
+    const sig = Ecdsa.Signature.fromDer(signature) catch return false;
+    sig.verify(data, pk) catch return false;
+    return true;
 }
 
 /// Verify a signature with RS256 (RSA with SHA-256) algorithm
@@ -311,72 +144,30 @@ fn verifyRS256(_: Allocator, public_key_bytes: []const u8, data: []const u8, sig
         return VerifyError.MissingKeyComponent;
     }
 
-    const n_bytes_unwrapped = n_bytes.?;
-    const e_bytes_unwrapped = e_bytes.?;
+    // Strip leading zero bytes (DER positive-integer padding) from the modulus
+    // and exponent.
+    const n = mem.trimStart(u8, n_bytes.?, "\x00");
+    const e = mem.trimStart(u8, e_bytes.?, "\x00");
 
-    const rsa = c.RSA_new() orelse
-        return VerifyError.LibraryError;
-    defer c.RSA_free(rsa);
+    const rsa = crypto.Certificate.rsa;
+    const Sha256 = crypto.hash.sha2.Sha256;
 
-    var bn_n_ptr: ?*c.BIGNUM = null;
-    var bn_e_ptr: ?*c.BIGNUM = null;
+    const pk = rsa.PublicKey.fromBytes(e, n) catch return VerifyError.InvalidPublicKey;
 
-    bn_n_ptr = c.BN_bin2bn(n_bytes_unwrapped.ptr, @intCast(n_bytes_unwrapped.len), null) orelse
-        return VerifyError.LibraryError;
-    errdefer if (bn_n_ptr) |ptr| c.BN_free(ptr);
-
-    bn_e_ptr = c.BN_bin2bn(e_bytes_unwrapped.ptr, @intCast(e_bytes_unwrapped.len), null) orelse {
-        if (bn_n_ptr) |ptr| c.BN_free(ptr);
-        return VerifyError.LibraryError;
-    };
-    errdefer if (bn_e_ptr) |ptr| c.BN_free(ptr);
-
-    if (bn_n_ptr != null and bn_e_ptr != null) {
-        if (c.RSA_set0_key(rsa, bn_n_ptr.?, bn_e_ptr.?, null) != 1) {
-            c.BN_free(bn_n_ptr.?);
-            c.BN_free(bn_e_ptr.?);
-            return VerifyError.InvalidPublicKey;
+    // PKCS1v1_5Signature.verify takes a comptime modulus length and a
+    // fixed-size signature; the signature length equals the RSA key size.
+    inline for (.{ 256, 384, 512 }) |klen| {
+        if (signature.len == klen) {
+            const sig: [klen]u8 = signature[0..klen].*;
+            rsa.PKCS1v1_5Signature.verify(klen, sig, data, pk, Sha256) catch return false;
+            return true;
         }
-    } else {
-        return VerifyError.LibraryError;
     }
 
-    const pkey = c.EVP_PKEY_new() orelse
-        return VerifyError.LibraryError;
-    defer c.EVP_PKEY_free(pkey);
-
-    if (c.EVP_PKEY_set1_RSA(pkey, rsa) != 1) {
-        return VerifyError.LibraryError;
-    }
-
-    const ctx = c.EVP_MD_CTX_new() orelse
-        return VerifyError.LibraryError;
-    defer c.EVP_MD_CTX_free(ctx);
-
-    if (c.EVP_DigestVerifyInit(ctx, null, c.EVP_sha256(), null, pkey) != 1) {
-        return VerifyError.LibraryError;
-    }
-
-    if (c.EVP_DigestVerifyUpdate(ctx, data.ptr, data.len) != 1) {
-        return VerifyError.LibraryError;
-    }
-
-    const result = c.EVP_DigestVerifyFinal(
-        ctx,
-        signature.ptr,
-        signature.len,
-    );
-
-    if (result == -1) {
-        return VerifyError.LibraryError;
-    }
-
-    return result == 1;
+    return VerifyError.InvalidSignature;
 }
 
 pub fn verifySignature(allocator: Allocator, public_key_base64url: []const u8, signature: []const u8, data: []const u8) !bool {
-    try initOpenSSL();
-
     var decoder = base64.url_safe_no_pad.Decoder;
     const key_size = try decoder.calcSizeForSlice(public_key_base64url);
     const key_buf = try allocator.alloc(u8, key_size);
@@ -427,8 +218,6 @@ fn base64urlToBytes(allocator: Allocator, b64str: []const u8) ![]u8 {
 test "verifyES256_signature using real WebAuthn data" {
     const allocator = testing.allocator;
 
-    try initOpenSSL();
-
     // Public key from credential registration
     const public_key_b64 = "pQECAyYgASFYIDNDxl6djmZTEhKfw1B5jiSdcFUsTKuyPpks-4jTpA5aIlggF5oAEvUgwjYE6o0sPzL6G27d72m3lM2-yPAMOajmYoE";
 
@@ -461,8 +250,6 @@ test "verifyES256_signature using real WebAuthn data" {
 
 test "verifyRS256_signature using real WebAuthn data" {
     const allocator = testing.allocator;
-
-    try initOpenSSL();
 
     // Real WebAuthn RS256 data
     const pubkey_bytes = [_]u8{ 0xa4, 0x01, 0x03, 0x03, 0x39, 0x01, 0x00, 0x20, 0x59, 0x01, 0x00, 0xcf, 0x69, 0xa1, 0x12, 0x7e, 0x71, 0x73, 0x1e, 0xc0, 0xae, 0x8e, 0x05, 0x5b, 0xce, 0x3a, 0x60, 0x0e, 0xeb, 0xd9, 0x06, 0xfb, 0x95, 0xde, 0x02, 0x25, 0x38, 0xca, 0xcd, 0x45, 0x29, 0x95, 0x6f, 0xec, 0xd9, 0x60, 0xd1, 0x51, 0x37, 0x74, 0x6c, 0x7b, 0x5e, 0x23, 0xcf, 0x94, 0x29, 0x01, 0x75, 0x38, 0xa9, 0x2b, 0xe4, 0x71, 0xc8, 0xf5, 0xab, 0xfb, 0x44, 0xce, 0xf1, 0x14, 0x09, 0x5c, 0x57, 0x71, 0x43, 0x54, 0xe7, 0x93, 0xe6, 0x2f, 0x71, 0xaf, 0x9a, 0x33, 0xbc, 0x44, 0xed, 0x0e, 0x50, 0xcd, 0x40, 0x2e, 0x90, 0x93, 0xa8, 0x55, 0x9c, 0xbd, 0x1e, 0xf8, 0x3e, 0xa5, 0xf2, 0x4e, 0xc5, 0x33, 0xbd, 0x63, 0x23, 0x06, 0xb4, 0xaf, 0xd9, 0xe8, 0x2b, 0xf9, 0xdf, 0x0f, 0x85, 0x61, 0x57, 0xe3, 0x37, 0x90, 0x66, 0x2d, 0x41, 0xd8, 0xed, 0x23, 0x28, 0x01, 0x06, 0x0b, 0x1a, 0x88, 0xc3, 0x11, 0xfb, 0x64, 0x0d, 0xdc, 0xc1, 0x2e, 0x0f, 0x8b, 0x05, 0xc8, 0x88, 0xe5, 0x43, 0x35, 0xab, 0x06, 0x23, 0x32, 0x40, 0xe8, 0x31, 0xfa, 0x34, 0x37, 0xb8, 0xe5, 0x3b, 0x25, 0x35, 0x21, 0x6a, 0xbe, 0x81, 0xd0, 0x49, 0x47, 0x41, 0x11, 0xed, 0xa0, 0x31, 0x71, 0xa4, 0x4d, 0xe2, 0x37, 0x56, 0xae, 0xad, 0xb4, 0x1d, 0x61, 0xae, 0xdf, 0x63, 0x78, 0x45, 0x01, 0xfb, 0x0a, 0x67, 0xcf, 0xa6, 0x8c, 0x77, 0x58, 0xa5, 0x74, 0xe9, 0x99, 0xb1, 0x94, 0x38, 0x51, 0xd7, 0x80, 0x79, 0x51, 0x2b, 0x63, 0x61, 0x74, 0x80, 0x7e, 0x08, 0x22, 0xff, 0x21, 0xfe, 0x8b, 0xff, 0x5b, 0xdb, 0xd1, 0x13, 0xb2, 0x64, 0xe7, 0x29, 0x6a, 0xbc, 0xff, 0x7f, 0x53, 0x6f, 0xed, 0x69, 0x5a, 0xba, 0xcf, 0x6f, 0xb9, 0xa1, 0xf0, 0xad, 0x3f, 0x7a, 0x6c, 0x23, 0x73, 0x7c, 0xc9, 0xa1, 0x03, 0x7d, 0x42, 0xff, 0x21, 0x43, 0x01, 0x00, 0x01 };
@@ -502,8 +289,6 @@ test "verifyRS256_signature using real WebAuthn data" {
 
 test "verify signature rejection with corrupted signatures" {
     const allocator = testing.allocator;
-
-    try initOpenSSL();
 
     // Test ES256 signature rejection
     {
@@ -590,10 +375,8 @@ test "verify signature rejection with corrupted signatures" {
     }
 }
 
-test "memory safety in OpenSSL integration" {
+test "memory safety in signature verification" {
     const allocator = testing.allocator;
-
-    try initOpenSSL();
 
     // --- 1. Regular case - verify valid signature ---
     {
@@ -632,59 +415,7 @@ test "memory safety in OpenSSL integration" {
         try testing.expect(verified);
     }
 
-    // --- 2. Error case - directly test the unwrapEC2Signature function ---
-    {
-        // Test with an empty signature
-        {
-            const empty_sig = [_]u8{};
-            const result = unwrapEC2Signature(allocator, &empty_sig);
-            try testing.expectError(error.InvalidSignature, result);
-        }
-
-        // Test with a signature that's too short
-        {
-            const short_sig = [_]u8{ 0x30, 0x02, 0x02, 0x00 };
-            const result = unwrapEC2Signature(allocator, &short_sig);
-            try testing.expectError(error.InvalidSignature, result);
-        }
-
-        // Test with a signature that has a wrong tag
-        {
-            // Not a SEQUENCE tag
-            const wrong_tag_sig = [_]u8{ 0x31, 0x08, 0x02, 0x01, 0x01, 0x02, 0x01, 0x02, 0x00, 0x00 };
-            const result = unwrapEC2Signature(allocator, &wrong_tag_sig);
-            try testing.expectError(error.InvalidSignature, result);
-        }
-
-        // Test with a signature that has an unreasonable length
-        {
-            // Sequence length that's reasonable for testing (0x10 instead of 0xFF)
-            const wrong_len_sig = [_]u8{ 0x30, 0x10, 0x02, 0x01, 0x01, 0x02, 0x01, 0x02 };
-            const result = unwrapEC2Signature(allocator, &wrong_len_sig);
-            try testing.expectError(error.InvalidSignature, result);
-        }
-    }
-
-    // --- 3. Check robustness with direct testing of the ASN.1 DER unwrapper ---
-    {
-        // Create a minimal valid ASN.1 DER structure
-        const min_der = [_]u8{
-            0x30, 0x06, // SEQUENCE, length 6
-            0x02, 0x01, 0x01, // INTEGER, length 1, value 1 (r)
-            0x02, 0x01, 0x02, // INTEGER, length 1, value 2 (s)
-        };
-
-        // This should be handled without crashing
-        if (unwrapEC2Signature(allocator, &min_der)) |sig| {
-            defer allocator.free(sig);
-            try testing.expect(sig.len == 64); // P256 = 32 bytes per component
-        } else |err| {
-            // Even if it fails, it shouldn't crash
-            try testing.expectEqual(error.InvalidSignature, err);
-        }
-    }
-
-    // --- 4. Test with invalid CBOR ---
+    // --- 2. Test with invalid CBOR ---
     {
         // Invalid CBOR test
         const invalid_cbor = "invalidCBORdataNotBase64";
