@@ -16,7 +16,7 @@ pub fn generateWithSize(io: Io, allocator: std.mem.Allocator, size: usize) ![]co
     const random_bytes = try allocator.alloc(u8, size);
     defer allocator.free(random_bytes);
 
-    io.random(random_bytes);
+    try io.randomSecure(random_bytes);
 
     const encoded_size = base64.url_safe_no_pad.Encoder.calcSize(random_bytes.len);
     const encoded = try allocator.alloc(u8, encoded_size);

@@ -35,9 +35,11 @@ pub fn build(b: *std.Build) void {
 
     // Add special frameworks for macOS
     if (target.result.os.tag == .macos) {
-        // step.linkFramework("Security");
-        // step.linkFramework("CoreFoundation");
+        // translate_c.linkFramework("Security");
+        // translate_c.linkFramework("CoreFoundation");
     }
+
+    const c_mod = translate_c.createModule();
 
     // Create and add the passcay module to the build so it can be referenced as a dependency
     const passcay_mod = b.addModule("passcay", .{
@@ -47,7 +49,7 @@ pub fn build(b: *std.Build) void {
         .imports = &.{
             .{
                 .name = "c",
-                .module = translate_c.createModule(),
+                .module = c_mod,
             },
         },
     });
@@ -77,7 +79,7 @@ pub fn build(b: *std.Build) void {
             .imports = &.{
                 .{
                     .name = "c",
-                    .module = translate_c.createModule(),
+                    .module = c_mod,
                 },
             },
         }),

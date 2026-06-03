@@ -37,7 +37,8 @@
     // internet connectivity.
     .dependencies = .{
         .zbor = .{
-            .url = "git+https://codeberg.org/r4gus/zbor#e96cd55a111bcbd76b1b51e4988a44ead1b0b48e",
+            // 0.21.1 tagged release (= commit e96cd55a)
+            .url = "git+https://codeberg.org/r4gus/zbor#0.21.1",
             .hash = "zbor-0.21.1-kr-CoPJ7AwCFwvJhlhfWF-E4qI7rnHF0MM0NwuZ1WOdU",
         },
         // Note: OpenSSL is a system dependency and needs to be installed separately
