@@ -2,16 +2,19 @@ name: Tests
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 jobs:
   test:
     strategy:
+      fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
         zig-version: [0.16.0, master]
 
-    name: Ubuntu / Zig ${{ matrix.zig-version }}
-    runs-on: ubuntu-latest
+    name: ${{ matrix.os }} / Zig ${{ matrix.zig-version }}
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout

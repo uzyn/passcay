@@ -23,35 +23,11 @@ pub fn build(b: *std.Build) void {
     });
     const zbor_mod = zbor_dep.module("zbor");
 
-    const translate_c = b.addTranslateC(.{
-        .root_source_file = b.path("src/c.h"),
-        .target = target,
-        .optimize = optimize,
-    });
-
-    // Link with OpenSSL dynamically
-    translate_c.linkSystemLibrary("crypto", .{});
-    translate_c.linkSystemLibrary("ssl", .{});
-
-    // Add special frameworks for macOS
-    if (target.result.os.tag == .macos) {
-        // translate_c.linkFramework("Security");
-        // translate_c.linkFramework("CoreFoundation");
-    }
-
-    const c_mod = translate_c.createModule();
-
     // Create and add the passcay module to the build so it can be referenced as a dependency
     const passcay_mod = b.addModule("passcay", .{
         .root_source_file = b.path("src/public.zig"),
         .target = target,
         .optimize = optimize,
-        .imports = &.{
-            .{
-                .name = "c",
-                .module = c_mod,
-            },
-        },
     });
     passcay_mod.addImport("zbor", zbor_mod);
 
@@ -76,12 +52,6 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/test_entry.zig"),
             .target = target,
             .optimize = optimize,
-            .imports = &.{
-                .{
-                    .name = "c",
-                    .module = c_mod,
-                },
-            },
         }),
     });
     lib_unit_tests.root_module.addImport("zbor", zbor_mod);
