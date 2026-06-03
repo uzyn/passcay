@@ -2,12 +2,13 @@ name: Tests
 
 on:
   push:
+  pull_request:
 
 jobs:
   test:
     strategy:
       matrix:
-        zig-version: [0.15.1, master]
+        zig-version: [0.16.0, master]
 
     name: Ubuntu / Zig ${{ matrix.zig-version }}
     runs-on: ubuntu-latest
