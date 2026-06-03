@@ -25,15 +25,13 @@ No system dependencies. Cryptographic verification uses Zig's standard library (
 
 ### Installation
 
-Add `passcay` to your `build.zig.zon` dependencies:
+Add `passcay` to your Zig project (`build.zig.zon`) dependencies:
 
-```zig
-.dependencies = .{
-    .passcay = .{
-        .url = "https://github.com/uzyn/passcay/archive/main.tar.gz",
-        // Optionally pin to a specific commit hash
-    },
-},
+```sh
+zig fetch --save git+https://github.com/uzyn/passcay.git
+
+# or load a specific version
+zig fetch --save git+https://github.com/uzyn/passcay.git#3.0.0
 ```
 
 And update your `build.zig` to load `passcay`:
