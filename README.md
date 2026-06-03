@@ -21,7 +21,7 @@ Zig version support:
 
 ## Dependencies
 
-No system dependencies. Cryptographic verification uses Zig's standard library (`std.crypto`), so Passcay builds and cross-compiles anywhere Zig runs, including Windows.
+No system dependencies. Cryptographic verification uses Zig's standard library (`std.crypto`), so Passcay builds and cross-compiles anywhere Zig runs, including Windows and macOS.
 
 ### Installation
 

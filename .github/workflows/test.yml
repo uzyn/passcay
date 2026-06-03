@@ -1,8 +1,5 @@
 name: Tests
 
-# Run once per change: pushes only on main (e.g. after merge), and pull_request
-# for everything else. PRs from forks/other contributors trigger pull_request,
-# so they are still covered; branches in this repo run only via their PR.
 on:
   push:
     branches: [main]
