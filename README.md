@@ -7,7 +7,7 @@
 **Minimal**, **fast** and **secure** Passkey (WebAuthn) relying party (RP) library for Zig.
 
 Zig version support:
-1. v3.x - Supports Zig v0.16. Pure Zig, no system dependencies (OpenSSL removed).
+1. v3.x - Supports Zig v0.16. First version with no system dependencies (OpenSSL is not more required).
 2. v2.x - Supports Zig v0.15
 3. v1.x - Supports Zig v0.14
 
@@ -22,8 +22,6 @@ Zig version support:
 ## Dependencies
 
 No system dependencies. Cryptographic verification uses Zig's standard library (`std.crypto`), so Passcay builds and cross-compiles anywhere Zig runs, including Windows.
-
-The only package dependency is [zbor](https://codeberg.org/r4gus/zbor) for CBOR decoding.
 
 ### Installation
 
