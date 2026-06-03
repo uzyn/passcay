@@ -37,8 +37,8 @@
     // internet connectivity.
     .dependencies = .{
         .zbor = .{
-            .url = "git+https://codeberg.org/r4gus/zbor#e96cd55a111bcbd76b1b51e4988a44ead1b0b48e",
-            .hash = "zbor-0.21.1-kr-CoPJ7AwCFwvJhlhfWF-E4qI7rnHF0MM0NwuZ1WOdU",
+            .url = "git+https://codeberg.org/r4gus/zbor?ref=0.21.2#658c1c0ec607557b52d2e2a42acbfad31058ecee",
+            .hash = "zbor-0.21.2-kr-CoPF7AwAU2EqWqJzgxd1jHhpaaRBK0_c1LCgiwTbn",
         },
     },
 
