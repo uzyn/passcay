@@ -15,13 +15,7 @@ const passcay = @import("root.zig");
 const types = passcay.types;
 const util = passcay.util;
 
-const c = @cImport({
-    @cInclude("openssl/ssl.h");
-    @cInclude("openssl/ec.h");
-    @cInclude("openssl/evp.h");
-    @cInclude("openssl/rsa.h");
-    @cInclude("openssl/err.h");
-});
+const c = @import("c");
 
 /// Initialize OpenSSL libraries - must be called before any crypto operations
 pub fn initOpenSSL() !void {

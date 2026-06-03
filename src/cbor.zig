@@ -538,7 +538,7 @@ test "parseAuthData basic functionality" {
     const testing = std.testing;
 
     var auth_data = [_]u8{0} ** 37;
-    std.crypto.random.bytes(auth_data[0..32]); // RP ID hash
+    testing.io.random(auth_data[0..32]); // RP ID hash
     auth_data[32] = 0x01;
 
     auth_data[33] = 0;
@@ -612,7 +612,7 @@ test "parseAuthenticatorData with user verified flag" {
     const testing = std.testing;
 
     var auth_data = [_]u8{0} ** 37; // Minimum length
-    std.crypto.random.bytes(auth_data[0..32]);
+    testing.io.random(auth_data[0..32]);
 
     auth_data[32] = 0x05; // 0x01 | 0x04
 

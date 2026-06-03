@@ -87,7 +87,7 @@ Store the following in database for authentication:
 ### Authentication
 
 ```zig
-const challenge = try passcay.challenge.generate(allocator);
+const challenge = try passcay.challenge.generate(io, allocator);
 // Pass challenge to client-side for authentication
 
 const input = passcay.auth.AuthVerifyInput{

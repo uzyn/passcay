@@ -1,22 +1,22 @@
 const std = @import("std");
 const base64 = std.base64;
-const crypto = std.crypto;
+const Io = std.Io;
 
 pub const DEFAULT_CHALLENGE_SIZE: usize = 32;
 
 /// Generate a cryptographically secure 32-byte random challenge for WebAuthn operations
 /// Returns base64url-encoded string that can be sent to the client
-pub fn generate(allocator: std.mem.Allocator) ![]const u8 {
-    return generateWithSize(allocator, DEFAULT_CHALLENGE_SIZE);
+pub fn generate(io: Io, allocator: std.mem.Allocator) ![]const u8 {
+    return generateWithSize(io, allocator, DEFAULT_CHALLENGE_SIZE);
 }
 
 /// Generate a challenge with a specific size in bytes
 /// Returns base64url-encoded string that can be sent to the client
-pub fn generateWithSize(allocator: std.mem.Allocator, size: usize) ![]const u8 {
+pub fn generateWithSize(io: Io, allocator: std.mem.Allocator, size: usize) ![]const u8 {
     const random_bytes = try allocator.alloc(u8, size);
     defer allocator.free(random_bytes);
 
-    crypto.random.bytes(random_bytes);
+    io.random(random_bytes);
 
     const encoded_size = base64.url_safe_no_pad.Encoder.calcSize(random_bytes.len);
     const encoded = try allocator.alloc(u8, encoded_size);
@@ -28,7 +28,7 @@ pub fn generateWithSize(allocator: std.mem.Allocator, size: usize) ![]const u8 {
 
 test "fixed 32-byte challenge generation" {
     const allocator = std.testing.allocator;
-    const challenge2 = try generate(allocator);
+    const challenge2 = try generate(std.testing.io, allocator);
     defer allocator.free(challenge2);
     try std.testing.expectEqual(@as(usize, 43), challenge2.len);
 }
@@ -36,11 +36,11 @@ test "fixed 32-byte challenge generation" {
 test "variable size challenge generation" {
     const allocator = std.testing.allocator;
 
-    const challenge = try generate(allocator);
+    const challenge = try generate(std.testing.io, allocator);
     defer allocator.free(challenge);
     try std.testing.expectEqual(@as(usize, 43), challenge.len);
 
-    const challenge_64 = try generateWithSize(allocator, 64);
+    const challenge_64 = try generateWithSize(std.testing.io, allocator, 64);
     defer allocator.free(challenge_64);
 
     // Calculate the expected size correctly based on the Base64 encoding

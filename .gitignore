@@ -1,4 +1,5 @@
 .DS_Store
 zig-out/
+zig-pkg/
 .zig-cache/
 /ref-*

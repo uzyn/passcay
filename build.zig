@@ -4,23 +4,6 @@ const std = @import("std");
 // declaratively construct a build graph that will be executed by an external
 // runner.
 
-/// Helper function to configure OpenSSL
-/// This function just does basic system library linking since we'll use the native OpenSSL
-fn linkWithOpenSSL(_: *std.Build, step: *std.Build.Step.Compile, target: std.Build.ResolvedTarget) void {
-    // Always link with libc
-    step.linkLibC();
-
-    // Link with OpenSSL libraries
-    step.linkSystemLibrary("crypto");
-    step.linkSystemLibrary("ssl");
-
-    // Add special frameworks for macOS
-    if (target.result.os.tag == .macos) {
-        // step.linkFramework("Security");
-        // step.linkFramework("CoreFoundation");
-    }
-}
-
 pub fn build(b: *std.Build) void {
     // Standard target options allows the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
@@ -40,11 +23,33 @@ pub fn build(b: *std.Build) void {
     });
     const zbor_mod = zbor_dep.module("zbor");
 
+    const translate_c = b.addTranslateC(.{
+        .root_source_file = b.path("src/c.h"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    // Link with OpenSSL dynamically
+    translate_c.linkSystemLibrary("crypto", .{});
+    translate_c.linkSystemLibrary("ssl", .{});
+
+    // Add special frameworks for macOS
+    if (target.result.os.tag == .macos) {
+        // step.linkFramework("Security");
+        // step.linkFramework("CoreFoundation");
+    }
+
     // Create and add the passcay module to the build so it can be referenced as a dependency
     const passcay_mod = b.addModule("passcay", .{
         .root_source_file = b.path("src/public.zig"),
         .target = target,
         .optimize = optimize,
+        .imports = &.{
+            .{
+                .name = "c",
+                .module = translate_c.createModule(),
+            },
+        },
     });
     passcay_mod.addImport("zbor", zbor_mod);
 
@@ -57,8 +62,6 @@ pub fn build(b: *std.Build) void {
         .root_module = passcay_mod,
     });
 
-    // Link with OpenSSL dynamically
-    linkWithOpenSSL(b, lib, target);
 
     // This declares intent for the library to be installed into the standard
     // location when the user invokes the "install" step (the default step when
@@ -72,12 +75,15 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/test_entry.zig"),
             .target = target,
             .optimize = optimize,
+            .imports = &.{
+                .{
+                    .name = "c",
+                    .module = translate_c.createModule(),
+                },
+            },
         }),
     });
     lib_unit_tests.root_module.addImport("zbor", zbor_mod);
-
-    // Link with OpenSSL for tests
-    linkWithOpenSSL(b, lib_unit_tests, target);
 
     const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
 

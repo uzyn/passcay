@@ -216,7 +216,7 @@ test "verify client data type mismatch" {
     const client_data_json = "{\"type\":\"webauthn.get\",\"challenge\":\"test_challenge\",\"origin\":\"https://example.com\"}";
     const attestation_obj = try allocator.alloc(u8, 256);
     defer allocator.free(attestation_obj);
-    std.crypto.random.bytes(attestation_obj);
+    std.Io.random(testing.io, attestation_obj);
 
     const attestation_obj_b64 = try passcay.util.encodeBase64Url(allocator, attestation_obj);
     defer allocator.free(attestation_obj_b64);
@@ -243,7 +243,7 @@ test "verify challenge mismatch" {
     const client_data_json = "{\"type\":\"webauthn.create\",\"challenge\":\"test_challenge\",\"origin\":\"https://example.com\"}";
     const attestation_obj = try allocator.alloc(u8, 256);
     defer allocator.free(attestation_obj);
-    std.crypto.random.bytes(attestation_obj);
+    std.Io.random(testing.io, attestation_obj);
 
     const attestation_obj_b64 = try passcay.util.encodeBase64Url(allocator, attestation_obj);
     defer allocator.free(attestation_obj_b64);
@@ -270,7 +270,7 @@ test "verify origin mismatch" {
     const client_data_json = "{\"type\":\"webauthn.create\",\"challenge\":\"test_challenge\",\"origin\":\"https://example.com\"}";
     const attestation_obj = try allocator.alloc(u8, 256);
     defer allocator.free(attestation_obj);
-    std.crypto.random.bytes(attestation_obj);
+    std.Io.random(testing.io, attestation_obj);
 
     const attestation_obj_b64 = try passcay.util.encodeBase64Url(allocator, attestation_obj);
     defer allocator.free(attestation_obj_b64);
