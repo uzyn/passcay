@@ -204,7 +204,10 @@ pub fn parseCoseKey(allocator: Allocator, key_cbor: []const u8) !CoseKeyParamete
     var map_iter = map;
     while (map_iter.next()) |pair| {
         if (pair.key.getType() == .Int) {
-            const key_int = pair.key.int().?;
+            // COSE map labels are small integers. zbor returns i65; switching on
+            // it directly miscompiles on Zig 0.16.0, so narrow to i32 (skipping
+            // any out-of-range label, which is never one we care about).
+            const key_int = std.math.cast(i32, pair.key.int().?) orelse continue;
 
             switch (key_int) {
                 1 => { // kty (key type)
