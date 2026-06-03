@@ -1,0 +1,4 @@
+# Zig requires LF line endings, and `zig fmt --check` rejects CRLF.
+# Force LF on checkout across all platforms (notably the Windows CI runner,
+# which would otherwise apply autocrlf). Binary files are auto-detected and left alone.
+* text=auto eol=lf

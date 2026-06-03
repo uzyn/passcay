@@ -7,8 +7,9 @@
 **Minimal**, **fast** and **secure** Passkey (WebAuthn) relying party (RP) library for Zig.
 
 Zig version support:
-1. v2.x - Supports Zig latest stable v0.15
-2. v1.x - Supports Zig v0.14
+1. v3.x - Supports Zig v0.16. First version with no system dependencies (OpenSSL is not more required).
+2. v2.x - Supports Zig v0.15
+3. v1.x - Supports Zig v0.14
 
 ## Features
 
@@ -20,9 +21,7 @@ Zig version support:
 
 ## Dependencies
 
-Dynamically linked to operating system's OpenSSL for crypto verification.
-
-Works on Linux and macOS. Not on Windows due to OpenSSL dependency.
+No system dependencies. Cryptographic verification uses Zig's standard library (`std.crypto`), so Passcay builds and cross-compiles anywhere Zig runs, including Windows and macOS.
 
 ### Installation
 

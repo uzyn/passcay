@@ -298,7 +298,7 @@ test "verify skipping user presence verification" {
     const client_data_json = "{\"type\":\"webauthn.create\",\"challenge\":\"test_challenge\",\"origin\":\"https://example.com\"}";
 
     // Create authenticator data with user verification (UV=1) but NO user presence (UP=0) flags
-    var auth_data = [_]u8{0} ** 100; // Make it large enough
+    var auth_data = std.mem.zeroes([100]u8); // Make it large enough
 
     // Add RP ID hash (32 bytes)
     var rp_id_hash: [32]u8 = undefined;

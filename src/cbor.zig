@@ -204,7 +204,10 @@ pub fn parseCoseKey(allocator: Allocator, key_cbor: []const u8) !CoseKeyParamete
     var map_iter = map;
     while (map_iter.next()) |pair| {
         if (pair.key.getType() == .Int) {
-            const key_int = pair.key.int().?;
+            // COSE map labels are small integers. zbor returns i65; switching on
+            // it directly miscompiles on Zig 0.16.0, so narrow to i32 (skipping
+            // any out-of-range label, which is never one we care about).
+            const key_int = std.math.cast(i32, pair.key.int().?) orelse continue;
 
             switch (key_int) {
                 1 => { // kty (key type)
@@ -478,7 +481,7 @@ test "parseAttestationObject basic functionality" {
     try buffer.appendSlice("authData");
     try buffer.append(0x58); // Byte string with 1-byte length
     try buffer.append(37); // Length 37
-    try buffer.appendSlice(&[_]u8{0} ** 37);
+    try buffer.appendSlice(&std.mem.zeroes([37]u8));
 
     const b64_encoded = try util.encodeBase64Url(testing.allocator, buffer.items);
     defer testing.allocator.free(b64_encoded);
@@ -537,7 +540,7 @@ test "parseCoseKey with EC2/P-256 key" {
 test "parseAuthData basic functionality" {
     const testing = std.testing;
 
-    var auth_data = [_]u8{0} ** 37;
+    var auth_data = std.mem.zeroes([37]u8);
     testing.io.random(auth_data[0..32]); // RP ID hash
     auth_data[32] = 0x01;
 
@@ -592,7 +595,7 @@ test "encodeAttestationObject basic functionality" {
     const testing = std.testing;
 
     const fmt = "none";
-    const auth_data = [_]u8{0} ** 37;
+    const auth_data = std.mem.zeroes([37]u8);
     const att_stmt = [_]u8{0xA0}; // Empty map
 
     const encoded = try encodeAttestationObject(testing.allocator, fmt, &auth_data, &att_stmt);
@@ -611,7 +614,7 @@ test "encodeAttestationObject basic functionality" {
 test "parseAuthenticatorData with user verified flag" {
     const testing = std.testing;
 
-    var auth_data = [_]u8{0} ** 37; // Minimum length
+    var auth_data = std.mem.zeroes([37]u8); // Minimum length
     testing.io.random(auth_data[0..32]);
 
     auth_data[32] = 0x05; // 0x01 | 0x04
