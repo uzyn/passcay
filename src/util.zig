@@ -45,7 +45,7 @@ pub fn parseClientDataJson(allocator: Allocator, client_data_json_b64: []const u
     }
     defer if (need_free) allocator.free(client_data_json_slice);
 
-    var parsed_json = try json.parseFromSlice(types.ClientDataJson, allocator, client_data_json_slice, .{});
+    var parsed_json = try json.parseFromSlice(types.ClientDataJson, allocator, client_data_json_slice, .{ .ignore_unknown_fields = true });
     defer parsed_json.deinit();
 
     const client_data = parsed_json.value;
@@ -95,6 +95,20 @@ test "parseClientDataJson memory management" {
     const allocator = std.testing.allocator;
     const test_json =
         \\{"type":"webauthn.get","challenge":"test_challenge","origin":"https://example.com"}
+    ;
+
+    var client_data = try parseClientDataJson(allocator, test_json);
+    defer client_data.deinit(allocator);
+
+    try std.testing.expectEqualStrings("webauthn.get", client_data.type);
+    try std.testing.expectEqualStrings("test_challenge", client_data.challenge);
+    try std.testing.expectEqualStrings("https://example.com", client_data.origin);
+}
+
+test "parseClientDataJson ignores unknown fields" {
+    const allocator = std.testing.allocator;
+    const test_json =
+        \\{"type":"webauthn.get","challenge":"test_challenge","origin":"https://example.com","topOrigin":"https://example.com","other_keys_can_be_added_here":"do not compare clientDataJSON against a template. See https://goo.gl/yabPex"}
     ;
 
     var client_data = try parseClientDataJson(allocator, test_json);
