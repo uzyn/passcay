@@ -32,20 +32,29 @@ pub fn encodeBase64Url(allocator: Allocator, data: []const u8) ![]const u8 {
     return encoded;
 }
 
-pub fn parseClientDataJson(allocator: Allocator, client_data_json_b64: []const u8) !types.ClientData {
-    var client_data_json_slice: []const u8 = undefined;
-    var need_free = false;
+/// Raw clientDataJSON bytes. Base64url input is decoded into an owned buffer
+/// (`owned` true, caller frees via deinit); raw JSON input is borrowed (`owned` false).
+pub const ClientDataBytes = struct {
+    bytes: []const u8,
+    owned: bool,
 
-    if (std.mem.indexOf(u8, client_data_json_b64, "{") == null) {
-        const decoded = try decodeBase64Url(allocator, client_data_json_b64);
-        client_data_json_slice = decoded;
-        need_free = true;
-    } else {
-        client_data_json_slice = client_data_json_b64;
+    pub fn deinit(self: ClientDataBytes, allocator: Allocator) void {
+        if (self.owned) allocator.free(self.bytes);
     }
-    defer if (need_free) allocator.free(client_data_json_slice);
+};
 
-    var parsed_json = try json.parseFromSlice(types.ClientDataJson, allocator, client_data_json_slice, .{ .ignore_unknown_fields = true });
+/// Decode clientDataJSON exactly once. '{' is not in the base64url alphabet, so its
+/// presence distinguishes raw JSON from base64url-encoded input.
+pub fn decodeClientDataJson(allocator: Allocator, input: []const u8) !ClientDataBytes {
+    if (std.mem.indexOf(u8, input, "{") == null) {
+        return .{ .bytes = try decodeBase64Url(allocator, input), .owned = true };
+    }
+    return .{ .bytes = input, .owned = false };
+}
+
+/// Parse already-decoded raw clientDataJSON bytes into an owned ClientData.
+pub fn parseClientDataJsonBytes(allocator: Allocator, json_bytes: []const u8) !types.ClientData {
+    var parsed_json = try json.parseFromSlice(types.ClientDataJson, allocator, json_bytes, .{ .ignore_unknown_fields = true });
     defer parsed_json.deinit();
 
     const client_data = parsed_json.value;
@@ -64,6 +73,12 @@ pub fn parseClientDataJson(allocator: Allocator, client_data_json_b64: []const u
         .challenge = challenge_copy,
         .origin = origin_copy,
     };
+}
+
+pub fn parseClientDataJson(allocator: Allocator, client_data_json_b64: []const u8) !types.ClientData {
+    const cd = try decodeClientDataJson(allocator, client_data_json_b64);
+    defer cd.deinit(allocator);
+    return parseClientDataJsonBytes(allocator, cd.bytes);
 }
 
 pub fn hasFlag(flags: u8, flag: types.AuthenticatorDataFlag) bool {
@@ -117,4 +132,24 @@ test "parseClientDataJson ignores unknown fields" {
     try std.testing.expectEqualStrings("webauthn.get", client_data.type);
     try std.testing.expectEqualStrings("test_challenge", client_data.challenge);
     try std.testing.expectEqualStrings("https://example.com", client_data.origin);
+}
+
+test "decodeClientDataJson base64url vs raw" {
+    const allocator = std.testing.allocator;
+    const raw_json =
+        \\{"type":"webauthn.get","challenge":"test_challenge","origin":"https://example.com"}
+    ;
+
+    const encoded = try encodeBase64Url(allocator, raw_json);
+    defer allocator.free(encoded);
+
+    const from_b64 = try decodeClientDataJson(allocator, encoded);
+    defer from_b64.deinit(allocator);
+    try std.testing.expect(from_b64.owned);
+    try std.testing.expectEqualStrings(raw_json, from_b64.bytes);
+
+    const from_raw = try decodeClientDataJson(allocator, raw_json);
+    defer from_raw.deinit(allocator);
+    try std.testing.expect(!from_raw.owned);
+    try std.testing.expectEqual(raw_json.ptr, from_raw.bytes.ptr);
 }
