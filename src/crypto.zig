@@ -26,35 +26,6 @@ pub fn sha256(data: []const u8, out: *[32]u8, _: anytype) void {
 pub const CoseAlg = types.CoseAlg;
 pub const VerifyError = types.VerifyError;
 
-/// Detect algorithm from a CBOR-encoded public key
-/// Explicitly identifies the algorithm by parsing the CBOR structure
-/// Returns ES256 or RS256 if supported, or an error otherwise
-pub fn getAlgorithm(key_bytes: []const u8) !CoseAlg {
-    if (key_bytes.len < 4) return VerifyError.InvalidKeyFormat;
-
-    var data_item = try cbor.DataItem.new(key_bytes);
-    if (data_item.getType() != .Map) return VerifyError.InvalidKeyFormat;
-
-    const map = data_item.map().?;
-
-    // Look for the algorithm identifier (key = 3)
-    var map_iter = map;
-    while (map_iter.next()) |pair| {
-        if (pair.key.getType() == .Int) {
-            const key_int = pair.key.int().?;
-
-            if (key_int == 3) { // 3 is the key for algorithm
-                if (pair.value.getType() != .Int) continue;
-                const alg_int = pair.value.int().?;
-                if (alg_int == -7) return CoseAlg.ES256;
-                if (alg_int == -257) return CoseAlg.RS256;
-                return VerifyError.UnsupportedAlgorithm;
-            }
-        }
-    }
-    return VerifyError.UnsupportedAlgorithm;
-}
-
 /// COSE algorithm id (the `alg` label, 3) from a CBOR-encoded public key.
 pub fn getAlgorithmId(key_bytes: []const u8) !i32 {
     if (key_bytes.len < 4) return VerifyError.InvalidKeyFormat;

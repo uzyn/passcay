@@ -34,7 +34,8 @@ pub const auth = struct {
     ///
     /// Verifies an authentication assertion with customizable security checks.
     /// Always requires user presence. Sign count verification can be enabled
-    /// for replay detection. Automatically detects ES256 or RS256 algorithm.
+    /// for replay detection. The signature algorithm is taken from the
+    /// credential public key's COSE `alg`.
     ///
     /// Returns an AuthVerifyResult with the new sign count to store if verification succeeds.
     pub const verify = auth_mod.verify;

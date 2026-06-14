@@ -43,6 +43,11 @@ pub const VerifyParams = struct {
 };
 
 pub const Result = struct {
+    /// Attestation trust type determined from the statement's structure.
+    /// IMPORTANT: `.basic`/`.attca` mean the attestation signature and chain are
+    /// *format-valid*, not that the chain is anchored to a trusted root —
+    /// root-of-trust is only enforced when `Policy.roots` or `Policy.mds` is
+    /// supplied. Do not treat the type alone as proof of a trusted authenticator.
     type: AttestationType,
 };
 
@@ -58,9 +63,11 @@ pub const Policy = struct {
     /// Empty accepts a self-signed chain top (dev/test); production should
     /// supply roots, typically from the FIDO metadata service.
     roots: []const []const u8 = &.{},
-    /// Verification instant for certificate time validity. null skips time
-    /// validity (each link verified at its own notBefore) — for borrowed
-    /// vectors with expired vendor certificates.
+    /// Verification instant (Unix seconds) for certificate time validity.
+    /// null SKIPS expiry / not-yet-valid checks (each link is verified at its
+    /// own notBefore) — convenient for borrowed/expired test vectors, but a
+    /// production caller enabling attestation should pass the current time so
+    /// expired attestation certificates are rejected.
     now_sec: ?i64 = null,
     /// FIDO metadata store. When set, full attestation resolves trust anchors
     /// and status reports by AAGUID (overriding `roots`); the AAGUID must be
