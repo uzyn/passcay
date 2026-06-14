@@ -94,6 +94,16 @@ fn verifyFull(
     }
     if (n == 0) return m.Error.InvalidAttestationStatement;
 
+    // The attestation x5c MUST NOT embed the trust anchor (root). A multi-cert
+    // chain whose top is self-signed inlines the root — reject it. (A single
+    // self-signed batch certificate referenced in metadata is allowed.)
+    if (n > 1) {
+        const top = x509.parse(chain[n - 1]) catch return m.Error.AttestationCertInvalid;
+        if (mem.eql(u8, top.parsed.subject(), top.parsed.issuer())) {
+            return m.Error.AttestationCertInvalid;
+        }
+    }
+
     const leaf = x509.parse(chain[0]) catch return m.Error.AttestationCertInvalid;
 
     // 1. Attestation signature verified with the leaf certificate's public key.
