@@ -126,18 +126,24 @@ pub fn verify(allocator: Allocator, params: VerifyParams, policy: Policy) !Resul
 
     // When metadata is configured, the produced attestation type must be one of
     // the authenticator model's declared attestationTypes (FIDO MDS). This
-    // rejects, e.g., a full ("basic") attestation from a model that only does
-    // surrogate/self attestation.
+    // rejects, e.g., a full attestation from a model that only does surrogate/
+    // self attestation.
     if (policy.mds) |store| {
-        const kind: ?mds.AttType = switch (result.type) {
-            .basic => .basic_full,
-            .self => .basic_surrogate,
-            .attca => .attca,
-            .anonca => .anonca,
-            .none => null,
-        };
-        if (kind) |k| {
-            if (!store.attestationTypeAllowed(params.aaguid, k)) return Error.AttestationTypeNotAllowed;
+        const aaguid = params.aaguid;
+        switch (result.type) {
+            // A packed/fido-u2f x5c chain is "Basic OR AttCA" (WebAuthn §6.5.3):
+            // the on-wire format is identical and we do not distinguish the two,
+            // so accept if the model's metadata permits either.
+            .basic => if (!store.attestationTypeAllowed(aaguid, .basic_full) and
+                !store.attestationTypeAllowed(aaguid, .attca))
+                return Error.AttestationTypeNotAllowed,
+            .self => if (!store.attestationTypeAllowed(aaguid, .basic_surrogate))
+                return Error.AttestationTypeNotAllowed,
+            .attca => if (!store.attestationTypeAllowed(aaguid, .attca))
+                return Error.AttestationTypeNotAllowed,
+            .anonca => if (!store.attestationTypeAllowed(aaguid, .anonca))
+                return Error.AttestationTypeNotAllowed,
+            .none => {},
         }
     }
 

@@ -354,6 +354,22 @@ test "conformance/mds: full attestation rejected when model declares surrogate-o
         defer reg.deinit(a);
         try testing.expectEqual(passcay.attestation.AttestationType.basic, reg.attestation_type);
     }
+
+    // A packed x5c attestation is "Basic OR AttCA" (§6.5.3); a model declaring
+    // only attca must still accept it (the on-wire format is indistinguishable).
+    {
+        const entry = passcay.mds.Entry{ .aaguid = aaguid, .roots = &roots, .statuses = &.{.fido_certified}, .attestation_types = &.{.attca} };
+        const store = passcay.mds.Store{ .entries = &.{entry} };
+        const reg = try regOk(a, .{
+            .challenge = td.rs256_reg_challenge,
+            .origin = origin,
+            .rp_id = rp_id,
+            .require_user_verification = true,
+            .attestation = .{ .now_sec = null, .mds = &store },
+        }, td.rs256_reg_attobj, td.rs256_reg_cdj);
+        defer reg.deinit(a);
+        try testing.expectEqual(passcay.attestation.AttestationType.basic, reg.attestation_type);
+    }
 }
 
 // ===================== Negative: specific-error assertions =====================
