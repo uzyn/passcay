@@ -16,6 +16,7 @@ const zbor = @import("zbor");
 
 const m = @import("mod.zig");
 const crypto = @import("../crypto.zig");
+const cbor = @import("../cbor.zig");
 const x509 = @import("../x509/mod.zig");
 
 const max_chain = 8;
@@ -127,7 +128,40 @@ fn verifyFull(
         if (!mem.eql(u8, aaguid, params.aaguid)) return m.Error.AttestationAaguidMismatch;
     }
 
+    // 5. The attestation (batch) certificate MUST NOT be the credential's own
+    // key — that would be self attestation masquerading as full.
+    if (leafKeyEqualsCredential(allocator, leaf, params.credential_public_key)) {
+        return m.Error.AttestationCertInvalid;
+    }
+
     return .{ .type = .basic };
+}
+
+/// Whether the leaf certificate's public key equals the credential public key
+/// (EC2 only; the case that distinguishes a disguised self attestation).
+fn leafKeyEqualsCredential(allocator: Allocator, leaf: x509.Cert, cred_cose: []const u8) bool {
+    if (leaf.parsed.pub_key_algo != .X9_62_id_ecPublicKey) return false;
+    const sec1 = leaf.publicKey(); // 0x04 || x || y
+    if (sec1.len < 3 or sec1[0] != 0x04) return false;
+    const flen = (sec1.len - 1) / 2;
+
+    const key = cbor.parseCoseKey(allocator, cred_cose) catch return false;
+    defer key.deinit(allocator);
+    if (key.key_type != .EC2) return false;
+    const x = key.x orelse return false;
+    const y = key.y orelse return false;
+    return coordEq(sec1[1 .. 1 + flen], x) and coordEq(sec1[1 + flen .. 1 + 2 * flen], y);
+}
+
+/// Compare a fixed-width coordinate to a COSE coordinate (which may have had
+/// leading zero bytes stripped).
+fn coordEq(field: []const u8, coord: []const u8) bool {
+    if (coord.len > field.len) return false;
+    const pad = field.len - coord.len;
+    for (field[0..pad]) |b| {
+        if (b != 0) return false;
+    }
+    return mem.eql(u8, field[pad..], coord);
 }
 
 /// Parse a BasicConstraints extension value, returning whether cA is TRUE.
