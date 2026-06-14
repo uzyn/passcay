@@ -158,7 +158,10 @@ pub fn verify(allocator: mem.Allocator, input: AuthVerifyInput, expectations: Au
         return error.UserVerificationRequired;
     }
 
-    const client_data = try util.parseClientDataJson(allocator, input.client_data_json);
+    const cd_bytes = try util.decodeClientDataJson(allocator, input.client_data_json);
+    defer cd_bytes.deinit(allocator);
+
+    const client_data = try util.parseClientDataJsonBytes(allocator, cd_bytes.bytes);
     defer client_data.deinit(allocator);
 
     if (!mem.eql(u8, client_data.type, "webauthn.get")) {
@@ -196,19 +199,8 @@ pub fn verify(allocator: mem.Allocator, input: AuthVerifyInput, expectations: Au
         }
     }
 
-    var client_data_json_bytes: []const u8 = undefined;
-    var need_free = false;
-
-    if (std.mem.indexOf(u8, input.client_data_json, "{") != null) {
-        client_data_json_bytes = input.client_data_json;
-    } else {
-        client_data_json_bytes = try util.decodeBase64Url(allocator, input.client_data_json);
-        need_free = true;
-    }
-    defer if (need_free) allocator.free(client_data_json_bytes);
-
     var client_data_hash: [32]u8 = undefined;
-    crypto.sha256(client_data_json_bytes, &client_data_hash, .{});
+    crypto.sha256(cd_bytes.bytes, &client_data_hash, .{});
 
     const auth_data_sig_bytes = try util.decodeBase64Url(allocator, input.authenticator_data);
     defer allocator.free(auth_data_sig_bytes);
