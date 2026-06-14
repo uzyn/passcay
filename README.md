@@ -17,11 +17,28 @@ Zig version support:
 
 ## Features
 
-- Passkey WebAuthn registration
-- Passkey WebAuthn authentication/verification (login)
-- Attestation-less passkey usage (privacy-preserving, does not affect security)
-- Cryptographic signature verification. Supports both ES256 & RS256, covering 100% of all Passkey authenticators today.
+- Passkey WebAuthn registration & authentication (login)
+- **Attestation-less by default** — privacy-preserving and recommended for passkeys (does not affect security)
+- **Optional attestation verification** (opt-in): formats `none`, `packed` (full + self), and `fido-u2f`, with real X.509 certificate-chain validation
+- **FIDO Metadata Service (MDS3)** integration: anchor attestation chains by AAGUID and gate on authenticator status reports
+- **Broad COSE algorithm support** — ES256/384, secp256k1, Ed25519, RS256/384/512, RS1, PS256/384/512 (see table below)
 - Secure challenge generation
+- No system dependencies — pure `std.crypto`, builds and cross-compiles anywhere Zig runs
+
+### Supported algorithms
+
+| COSE alg | Algorithm | Status |
+|---|---|---|
+| `-7` | ES256 (ECDSA P-256) | ✅ |
+| `-35` | ES384 (ECDSA P-384) | ✅ |
+| `-47` | ES256K (ECDSA secp256k1) | ✅ |
+| `-8` | EdDSA (Ed25519) | ✅ |
+| `-257` / `-258` / `-259` | RS256 / RS384 / RS512 (RSASSA-PKCS1-v1_5) | ✅ |
+| `-37` / `-38` / `-39` | PS256 / PS384 / PS512 (RSASSA-PSS) | ✅ |
+| `-65535` | RS1 (RSASSA-PKCS1-v1_5 SHA-1, legacy) | ✅ |
+| `-36` | ES512 (ECDSA P-521) | ❌ not available in Zig `std.crypto` |
+
+ES256 and RS256 cover 100% of passkey authenticators today; the others support FIDO2 conformance and non-passkey deployments.
 
 ## Dependencies
 
@@ -84,6 +101,28 @@ Store the following in database for authentication:
 - `reg.credential_id`
 - `reg.public_key`
 - `reg.sign_count` (usually starts at 0)
+
+### Attestation verification (optional)
+
+By default Passcay is attestation-less (recommended for passkeys). To cryptographically verify the attestation statement, pass an `attestation` policy:
+
+```zig
+const reg = try passcay.register.verify(allocator, input, .{
+    .challenge = challenge,
+    .origin = "https://example.com",
+    .rp_id = "example.com",
+    .require_user_verification = true,
+    .attestation = .{}, // verify the attestation statement (none / packed / fido-u2f)
+});
+// reg.attestation_type -> .none, .self, .basic, ...
+```
+
+For full (x5c) attestation, supply trust anchors directly with `.roots`, or a FIDO
+Metadata Service store with `.mds` to anchor chains by AAGUID and enforce status reports:
+
+```zig
+.attestation = .{ .mds = &metadata_store }, // passcay.mds.Store
+```
 
 ### Authentication
 
@@ -181,6 +220,7 @@ Reference implementations for integrating Passcay into your application:
 
 - `docs/register.md` - Registration flow with challenge generation
 - `docs/login.md` - Authentication flow with verification
+- `conformance/` - FIDO2 Server Conformance implementation built on Passcay (real verification; offline replay harness)
 
 ## See also
 

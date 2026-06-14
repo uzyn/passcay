@@ -50,6 +50,11 @@ pub const RegVerifyExpectations = struct {
     /// Whether to require user presence (UP flag)
     /// User presence means the user physically interacted with the authenticator
     require_user_presence: bool = true,
+
+    /// Attestation policy. null (default) skips attestation-statement
+    /// verification entirely — appropriate for privacy-preserving passkeys.
+    /// Set a policy to cryptographically verify the attestation statement.
+    attestation: ?passcay.attestation.Policy = null,
 };
 
 /// Registration verification input data
@@ -87,6 +92,9 @@ pub const RegVerifyResult = struct {
     fmt: []const u8,
     /// Flags from the authenticator data
     flags: u8,
+    /// Attestation trust type determined during verification. Defaults to
+    /// `.none` when no attestation policy was supplied.
+    attestation_type: passcay.attestation.AttestationType = .none,
 
     /// Free all allocated memory in this result
     pub fn deinit(self: *const RegVerifyResult, allocator: mem.Allocator) void {
@@ -114,7 +122,10 @@ fn sha256(allocator: mem.Allocator, data: []const u8) ![]const u8 {
 /// Always requires "webauthn.create" type.
 /// Returns credential data to store if verification succeeds.
 pub fn verify(allocator: mem.Allocator, input: RegVerifyInput, expectations: RegVerifyExpectations) !RegVerifyResult {
-    const client_data = try passcay.util.parseClientDataJson(allocator, input.client_data_json);
+    const cd = try passcay.util.decodeClientDataJson(allocator, input.client_data_json);
+    defer cd.deinit(allocator);
+
+    const client_data = try passcay.util.parseClientDataJsonBytes(allocator, cd.bytes);
     defer client_data.deinit(allocator);
 
     if (!mem.eql(u8, client_data.type, "webauthn.create")) {
@@ -131,10 +142,10 @@ pub fn verify(allocator: mem.Allocator, input: RegVerifyInput, expectations: Reg
         }
     }
 
-    const attestation = try passcay.cbor.parseAttestationObject(allocator, input.attestation_object);
-    defer attestation.deinit(allocator);
+    const att_obj = try passcay.cbor.parseAttestationObject(allocator, input.attestation_object);
+    defer att_obj.deinit(allocator);
 
-    const auth_data = try passcay.cbor.parseAuthenticatorData(allocator, attestation.auth_data);
+    const auth_data = try passcay.cbor.parseAuthenticatorData(allocator, att_obj.auth_data);
     defer auth_data.deinit(allocator);
 
     if (expectations.rp_id) |expected_rp_id| {
@@ -185,6 +196,23 @@ pub fn verify(allocator: mem.Allocator, input: RegVerifyInput, expectations: Reg
         else => return error.UnsupportedKeyType,
     }
 
+    var attestation_type: passcay.attestation.AttestationType = .none;
+    if (expectations.attestation) |policy| {
+        var client_data_hash: [32]u8 = undefined;
+        passcay.crypto.sha256(cd.bytes, &client_data_hash, .{});
+
+        const att_result = try passcay.attestation.verify(allocator, .{
+            .fmt = att_obj.fmt,
+            .att_stmt = att_obj.att_stmt,
+            .auth_data = att_obj.auth_data,
+            .client_data_hash = &client_data_hash,
+            .credential_public_key = credential_public_key,
+            .aaguid = auth_data.aaguid orelse return error.MissingAAGUID,
+            .credential_id = credential_id,
+        }, policy);
+        attestation_type = att_result.type;
+    }
+
     const credential_id_base64 = try passcay.util.encodeBase64Url(allocator, credential_id);
     errdefer allocator.free(credential_id_base64);
 
@@ -194,7 +222,7 @@ pub fn verify(allocator: mem.Allocator, input: RegVerifyInput, expectations: Reg
     const aaguid_base64 = try passcay.util.encodeBase64Url(allocator, auth_data.aaguid orelse return error.MissingAAGUID);
     errdefer allocator.free(aaguid_base64);
 
-    const fmt_copy = try allocator.dupe(u8, attestation.fmt);
+    const fmt_copy = try allocator.dupe(u8, att_obj.fmt);
     errdefer allocator.free(fmt_copy);
 
     const result = RegVerifyResult{
@@ -204,6 +232,7 @@ pub fn verify(allocator: mem.Allocator, input: RegVerifyInput, expectations: Reg
         .aaguid = aaguid_base64,
         .fmt = fmt_copy,
         .flags = auth_data.flags,
+        .attestation_type = attestation_type,
     };
     return result;
 }

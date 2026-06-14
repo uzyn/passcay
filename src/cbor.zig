@@ -49,7 +49,6 @@ pub fn parseAttestationObject(allocator: Allocator, attestation_object_b64: []co
 
     if (fmt == null or auth_data == null) {
         arena.deinit();
-        std.debug.print("Invalid attestation format. fmt={any}, auth_data={any}, att_stmt={any}\n", .{ fmt != null, auth_data != null, att_stmt != null });
         return error.InvalidAttestationFormat;
     }
 
@@ -59,18 +58,12 @@ pub fn parseAttestationObject(allocator: Allocator, attestation_object_b64: []co
     const auth_data_copy = try allocator.dupe(u8, auth_data.?);
     errdefer allocator.free(auth_data_copy);
 
-    var raw_att_stmt: []const u8 = undefined;
-    if (att_stmt != null) {
-        if (att_stmt.?.getType() == .Map) {
-            raw_att_stmt = try allocator.dupe(u8, &[_]u8{});
-        } else if (att_stmt.?.getType() == .ByteString) {
-            raw_att_stmt = try allocator.dupe(u8, att_stmt.?.string().?);
-        } else {
-            raw_att_stmt = try allocator.dupe(u8, &[_]u8{});
-        }
-    } else {
-        raw_att_stmt = try allocator.dupe(u8, &[_]u8{});
-    }
+    // Retain the raw CBOR bytes of the attestation statement so attestation
+    // verifiers can inspect it. zbor slices each map value to its exact bytes.
+    const raw_att_stmt = if (att_stmt) |stmt|
+        try allocator.dupe(u8, stmt.data)
+    else
+        try allocator.dupe(u8, &[_]u8{});
     errdefer allocator.free(raw_att_stmt);
 
     arena.deinit();
@@ -217,12 +210,9 @@ pub fn parseCoseKey(allocator: Allocator, key_cbor: []const u8) !CoseKeyParamete
                 },
                 3 => { // alg (algorithm)
                     if (pair.value.getType() != .Int) continue;
-                    const alg_int = pair.value.int().?;
-                    // We only support ES256 and RS256
-                    const alg_val = @as(i32, @intCast(alg_int));
-                    if (alg_val == -7 or alg_val == -257) {
-                        algorithm = @enumFromInt(alg_val);
-                    }
+                    // Record any COSE algorithm; support is enforced downstream.
+                    const alg_val = std.math.cast(i32, pair.value.int().?) orelse continue;
+                    algorithm = @enumFromInt(alg_val);
                 },
                 -1 => { // crv (curve) or n (RSA modulus) depending on key type
                     if (key_type) |kt| {

@@ -10,6 +10,8 @@ const auth_mod = @import("auth.zig");
 const register_mod = @import("register.zig");
 const util_mod = @import("util.zig");
 const types_mod = @import("types.zig");
+const attestation_mod = @import("attestation/mod.zig");
+const mds_mod = @import("mds/mod.zig");
 
 // Public API - only expose the core verification functions
 pub const challenge = struct {
@@ -64,6 +66,32 @@ pub const register = struct {
 
     /// Use the common WebAuthnError type from types module
     pub const RegistrationError = register_mod.RegistrationError;
+};
+
+// Attestation statement verification (opt-in via register.RegVerifyExpectations.attestation)
+pub const attestation = struct {
+    /// Verify an attestation statement against a policy
+    pub const verify = attestation_mod.verify;
+
+    /// Relying party attestation policy
+    pub const Policy = attestation_mod.Policy;
+
+    /// WebAuthn attestation trust type
+    pub const AttestationType = attestation_mod.AttestationType;
+
+    /// Inputs to an attestation verifier
+    pub const VerifyParams = attestation_mod.VerifyParams;
+
+    /// Result of attestation verification
+    pub const Result = attestation_mod.Result;
+};
+
+// FIDO Metadata Service (MDS3) trust store, used to configure attestation.Policy.mds
+pub const mds = struct {
+    pub const Store = mds_mod.Store;
+    pub const Entry = mds_mod.Entry;
+    pub const AuthenticatorStatus = mds_mod.AuthenticatorStatus;
+    pub const parseStatement = mds_mod.parseStatement;
 };
 
 // Utility functions needed for demos - minimal exposure
