@@ -124,5 +124,22 @@ pub fn verify(allocator: Allocator, params: VerifyParams, policy: Policy) !Resul
         else => {},
     }
 
+    // When metadata is configured, the produced attestation type must be one of
+    // the authenticator model's declared attestationTypes (FIDO MDS). This
+    // rejects, e.g., a full ("basic") attestation from a model that only does
+    // surrogate/self attestation.
+    if (policy.mds) |store| {
+        const kind: ?mds.AttType = switch (result.type) {
+            .basic => .basic_full,
+            .self => .basic_surrogate,
+            .attca => .attca,
+            .anonca => .anonca,
+            .none => null,
+        };
+        if (kind) |k| {
+            if (!store.attestationTypeAllowed(params.aaguid, k)) return Error.AttestationTypeNotAllowed;
+        }
+    }
+
     return result;
 }

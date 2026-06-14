@@ -56,12 +56,41 @@ pub const AuthenticatorStatus = enum {
     }
 };
 
+/// Attestation types a model may produce (FIDO MDS `attestationTypes`).
+pub const AttType = enum {
+    basic_full,
+    basic_surrogate,
+    attca,
+    anonca,
+
+    pub fn fromString(s: []const u8) ?AttType {
+        const eql = std.mem.eql;
+        if (eql(u8, s, "basic_full")) return .basic_full;
+        if (eql(u8, s, "basic_surrogate")) return .basic_surrogate;
+        if (eql(u8, s, "attca")) return .attca;
+        if (eql(u8, s, "anonca")) return .anonca;
+        return null; // ignore unknown/"none"
+    }
+};
+
 pub const Entry = struct {
     aaguid: [16]u8,
     /// Attestation root certificates (DER) — trust anchors for this model.
     roots: []const []const u8,
     /// Status reports for this model.
     statuses: []const AuthenticatorStatus,
+    /// Declared attestation types. Empty means unspecified (no enforcement).
+    attestation_types: []const AttType = &.{},
+
+    /// Whether the model is permitted to produce attestations of `kind`. An
+    /// empty declaration permits any type.
+    pub fn allows(entry: *const Entry, kind: AttType) bool {
+        if (entry.attestation_types.len == 0) return true;
+        for (entry.attestation_types) |t| {
+            if (t == kind) return true;
+        }
+        return false;
+    }
 };
 
 pub const Store = struct {
@@ -73,6 +102,21 @@ pub const Store = struct {
             if (std.mem.eql(u8, &e.aaguid, aaguid)) return e;
         }
         return null;
+    }
+
+    /// Whether `kind` is permitted for `aaguid`, considering all matching
+    /// entries. An unknown AAGUID, or one whose entries declare no types, is
+    /// unrestricted; a known AAGUID is rejected only if no matching entry
+    /// permits the type (robust to duplicate blob/local entries).
+    pub fn attestationTypeAllowed(self: Store, aaguid: []const u8, kind: AttType) bool {
+        if (aaguid.len != 16) return true;
+        var known = false;
+        for (self.entries) |*e| {
+            if (!std.mem.eql(u8, &e.aaguid, aaguid)) continue;
+            known = true;
+            if (e.allows(kind)) return true;
+        }
+        return !known;
     }
 
     /// Reject if any status report marks the authenticator compromised.
@@ -89,11 +133,13 @@ const StatusReport = struct { status: []const u8 };
 const Inner = struct {
     aaguid: ?[]const u8 = null,
     attestationRootCertificates: ?[]const []const u8 = null,
+    attestationTypes: ?[]const []const u8 = null,
 };
 const Statement = struct {
     aaguid: ?[]const u8 = null,
     attestationRootCertificates: ?[]const []const u8 = null,
     statusReports: ?[]const StatusReport = null,
+    attestationTypes: ?[]const []const u8 = null,
     metadataStatement: ?Inner = null,
 };
 
@@ -124,10 +170,18 @@ fn stmtToEntry(arena: Allocator, s: Statement) !Entry {
         for (reports) |r| try statuses.append(AuthenticatorStatus.fromString(r.status));
     }
 
+    const types_str = s.attestationTypes orelse
+        (if (s.metadataStatement) |ms| ms.attestationTypes else null) orelse &.{};
+    var atypes = std.array_list.Managed(AttType).init(arena);
+    for (types_str) |t| {
+        if (AttType.fromString(t)) |k| try atypes.append(k);
+    }
+
     return Entry{
         .aaguid = aaguid,
         .roots = try roots.toOwnedSlice(),
         .statuses = try statuses.toOwnedSlice(),
+        .attestation_types = try atypes.toOwnedSlice(),
     };
 }
 

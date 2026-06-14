@@ -318,6 +318,44 @@ test "conformance/mds: AAGUID-anchored packed-full verification with status gati
     }
 }
 
+test "conformance/mds: full attestation rejected when model declares surrogate-only" {
+    const a = testing.allocator;
+    const cert_der = try firstX5c(a, td.rs256_reg_attobj);
+    defer a.free(cert_der);
+
+    const aaguid = [_]u8{ 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8 };
+    const roots = [_][]const u8{cert_der};
+
+    // Metadata says this model only does surrogate (self) attestation, but the
+    // response carries a full ("basic") packed attestation — must be rejected.
+    {
+        const entry = passcay.mds.Entry{ .aaguid = aaguid, .roots = &roots, .statuses = &.{.fido_certified}, .attestation_types = &.{.basic_surrogate} };
+        const store = passcay.mds.Store{ .entries = &.{entry} };
+        try testing.expectError(error.AttestationTypeNotAllowed, regOk(a, .{
+            .challenge = td.rs256_reg_challenge,
+            .origin = origin,
+            .rp_id = rp_id,
+            .require_user_verification = true,
+            .attestation = .{ .now_sec = null, .mds = &store },
+        }, td.rs256_reg_attobj, td.rs256_reg_cdj));
+    }
+
+    // The same full attestation is accepted when the model declares basic_full.
+    {
+        const entry = passcay.mds.Entry{ .aaguid = aaguid, .roots = &roots, .statuses = &.{.fido_certified}, .attestation_types = &.{ .basic_full, .basic_surrogate } };
+        const store = passcay.mds.Store{ .entries = &.{entry} };
+        const reg = try regOk(a, .{
+            .challenge = td.rs256_reg_challenge,
+            .origin = origin,
+            .rp_id = rp_id,
+            .require_user_verification = true,
+            .attestation = .{ .now_sec = null, .mds = &store },
+        }, td.rs256_reg_attobj, td.rs256_reg_cdj);
+        defer reg.deinit(a);
+        try testing.expectEqual(passcay.attestation.AttestationType.basic, reg.attestation_type);
+    }
+}
+
 // ===================== Negative: specific-error assertions =====================
 
 test "conformance/neg: challenge mismatch -> ChallengeMismatch" {
