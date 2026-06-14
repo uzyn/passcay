@@ -19,8 +19,8 @@ Zig version support:
 
 - Passkey WebAuthn registration & authentication (login)
 - **Attestation-less by default** — privacy-preserving and recommended for passkeys (does not affect security)
-- **Optional attestation verification** (opt-in): formats `none`, `packed` (full + self), and `fido-u2f`, with real X.509 certificate-chain validation
-- **FIDO Metadata Service (MDS3)** integration: anchor attestation chains by AAGUID and gate on authenticator status reports
+- **Optional attestation verification** (opt-in): formats `none`, `packed` (full + self), `fido-u2f`, and `tpm`, with real X.509 certificate-chain validation
+- **FIDO Metadata Service (MDS3)** integration: anchor attestation chains by AAGUID, gate on authenticator status reports, and reject BLOBs signed by a CRL-revoked certificate
 - **Broad COSE algorithm support** — ES256/384, secp256k1, Ed25519, RS256/384/512, RS1, PS256/384/512 (see table below)
 - Secure challenge generation
 - No system dependencies — pure `std.crypto`, builds and cross-compiles anywhere Zig runs
@@ -112,9 +112,9 @@ const reg = try passcay.register.verify(allocator, input, .{
     .origin = "https://example.com",
     .rp_id = "example.com",
     .require_user_verification = true,
-    .attestation = .{}, // verify the attestation statement (none / packed / fido-u2f)
+    .attestation = .{}, // verify the attestation statement (none / packed / fido-u2f / tpm)
 });
-// reg.attestation_type -> .none, .self, .basic, ...
+// reg.attestation_type -> .none, .self, .basic, .attca, ...
 ```
 
 For full (x5c) attestation, supply trust anchors directly with `.roots`, or a FIDO
