@@ -59,6 +59,12 @@ pub fn verifySignedBy(subject: Cert, issuer: Cert, now_sec: i64) !void {
 /// `now_sec` pins the verification instant; pass null to skip certificate time
 /// validity (each link is verified at its own notBefore) — used for borrowed
 /// vectors with expired vendor certificates.
+///
+/// Note: internal links are verified cryptographically and for time validity,
+/// but intermediate `basicConstraints` (cA / pathLenConstraint) are not
+/// enforced — a deliberate simplification versus full RFC 5280 path validation.
+/// Trust still derives from the supplied anchors; forging a chain requires a
+/// CA key. The attestation leaf's CA flag is checked by the format verifiers.
 pub fn verifyChain(
     allocator: Allocator,
     chain_der: []const []const u8,
@@ -122,8 +128,15 @@ pub fn verifyDataFmt(cert: Cert, alg_id: i32, signature: []const u8, data: []con
             }
         },
         .rsaEncryption => {
-            if (desc.scheme != .rsa_pkcs1) return Error.SignatureAlgorithmMismatch;
-            return verifyRsaPkcs1(pubkey, signature, data, desc.hash);
+            return switch (desc.scheme) {
+                .rsa_pkcs1 => verifyRsaPkcs1(pubkey, signature, data, desc.hash),
+                .rsa_pss => verifyRsaPss(pubkey, signature, data, desc.hash),
+                else => Error.SignatureAlgorithmMismatch,
+            };
+        },
+        .curveEd25519 => {
+            if (desc.scheme != .eddsa) return Error.SignatureAlgorithmMismatch;
+            return verifyEd25519(pubkey, signature, data);
         },
         else => return Error.UnsupportedCertKey,
     }
@@ -164,6 +177,41 @@ fn verifyRsaHash(pk: Certificate.rsa.PublicKey, sig: []const u8, data: []const u
         }
     }
     return false;
+}
+
+fn verifyRsaPss(spki_der: []const u8, sig: []const u8, data: []const u8, hash: alg.HashAlg) bool {
+    const rsa = Certificate.rsa;
+    const parsed = rsa.PublicKey.parseDer(spki_der) catch return false;
+    const pk = rsa.PublicKey.fromBytes(parsed.exponent, parsed.modulus) catch return false;
+    return switch (hash) {
+        .sha1 => verifyRsaPssHash(pk, sig, data, std.crypto.hash.Sha1),
+        .sha256 => verifyRsaPssHash(pk, sig, data, std.crypto.hash.sha2.Sha256),
+        .sha384 => verifyRsaPssHash(pk, sig, data, std.crypto.hash.sha2.Sha384),
+        .sha512 => verifyRsaPssHash(pk, sig, data, std.crypto.hash.sha2.Sha512),
+    };
+}
+
+fn verifyRsaPssHash(pk: Certificate.rsa.PublicKey, sig: []const u8, data: []const u8, comptime Hash: type) bool {
+    inline for (.{ 256, 384, 512 }) |klen| {
+        if (sig.len == klen) {
+            const s: [klen]u8 = sig[0..klen].*;
+            Certificate.rsa.PSSSignature.verify(klen, s, data, pk, Hash) catch return false;
+            return true;
+        }
+    }
+    return false;
+}
+
+/// Verify an Ed25519 signature (raw 64-byte, as used by JOSE EdDSA) with the
+/// certificate's 32-byte Ed25519 public key.
+fn verifyEd25519(pub_key: []const u8, sig: []const u8, data: []const u8) bool {
+    const Ed = std.crypto.sign.Ed25519;
+    if (pub_key.len != Ed.PublicKey.encoded_length) return false;
+    if (sig.len != Ed.Signature.encoded_length) return false;
+    const pk = Ed.PublicKey.fromBytes(pub_key[0..Ed.PublicKey.encoded_length].*) catch return false;
+    const s = Ed.Signature.fromBytes(sig[0..Ed.Signature.encoded_length].*);
+    s.verify(data, pk) catch return false;
+    return true;
 }
 
 // ===================== Tests =====================
@@ -233,4 +281,28 @@ test "x509 signature check enforces certificate time validity" {
     try std.testing.expect(std.meta.isError(verifySignedBy(cert, cert, 100)));
     // Within the validity window it succeeds.
     try verifySignedBy(cert, cert, 1_600_000_000);
+}
+
+test "x509 verifyChain rejects a chain whose top is not anchored" {
+    const a = std.testing.allocator;
+    const cert_der = try extractFirstX5c(a, td.rs256_reg_attobj);
+    defer a.free(cert_der);
+    // An unrelated certificate as the only trust anchor: the self-signed batch
+    // cert is neither byte-identical to it nor signed by it -> UntrustedRoot.
+    try std.testing.expectError(Error.UntrustedRoot, verifyChain(a, &.{cert_der}, &.{@embedFile("../testdata/test_crl_ca.der")}, 1_600_000_000));
+}
+
+test "x509 verifies an RSA-PSS (PS256) certificate signature" {
+    const cert = try parse(@embedFile("../testdata/test_pss_cert.der"));
+    const sig = @embedFile("../testdata/test_pss_sig.bin");
+    try std.testing.expect(try verifyData(cert, -37, sig, "passcay x509 alg test vector"));
+    try std.testing.expect(!try verifyData(cert, -37, sig, "tampered message"));
+}
+
+test "x509 verifies an Ed25519 (EdDSA) certificate signature" {
+    const cert = try parse(@embedFile("../testdata/test_ed25519_cert.der"));
+    const sig = @embedFile("../testdata/test_ed25519_sig.bin");
+    // JOSE EdDSA is raw 64-byte; the format flag is irrelevant for Ed25519.
+    try std.testing.expect(try verifyDataFmt(cert, -8, sig, "passcay x509 alg test vector", .raw));
+    try std.testing.expect(!try verifyDataFmt(cert, -8, sig, "tampered message", .raw));
 }
