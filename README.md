@@ -4,6 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Zig](https://img.shields.io/badge/Zig-0.16-f7a41d.svg)](https://ziglang.org)
 [![WebAuthn / FIDO2](https://img.shields.io/badge/WebAuthn-FIDO2-6f42c1.svg)](https://www.w3.org/TR/webauthn/)
+[![FIDO2 Server Conformance](https://img.shields.io/badge/FIDO2%20Server-conformant-2ea44f.svg)](https://fidoalliance.org/certification/functional-certification/conformance/)
 
 ![Passcay Logo](docs/passcay-logo.png)
 
@@ -18,7 +19,7 @@ Zig version support:
 ## Features
 
 - Passkey WebAuthn registration & authentication (login)
-- **FIDO2 conformant** — passes the official FIDO Alliance FIDO2 Server conformance test suite (100%)
+- **FIDO2 conformant** — passes the [official FIDO Alliance FIDO2 Server conformance test suite](https://fidoalliance.org/certification/functional-certification/conformance/) (100%)
 - **Attestation-less by default** — privacy-preserving and recommended for passkeys (does not affect security)
 - **Optional attestation verification** (opt-in): `none`, `packed` (full + self), `fido-u2f`, and `tpm` — covering platform authenticators like **Windows Hello** (TPM) and roaming security keys — with real X.509 certificate-chain validation
 - **FIDO Metadata Service (MDS3)** integration: anchor attestation chains by AAGUID, gate on authenticator status reports, and reject BLOBs signed by a CRL-revoked certificate
