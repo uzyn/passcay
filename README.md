@@ -1,5 +1,9 @@
 # Passcay
 [![Tests](https://github.com/uzyn/passcay/actions/workflows/test.yml/badge.svg)](https://github.com/uzyn/passcay/actions/workflows/test.yml)
+[![Latest release](https://img.shields.io/github/v/tag/uzyn/passcay?label=release&sort=semver)](https://github.com/uzyn/passcay/tags)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Zig](https://img.shields.io/badge/Zig-0.16-f7a41d.svg)](https://ziglang.org)
+[![WebAuthn / FIDO2](https://img.shields.io/badge/WebAuthn-FIDO2-6f42c1.svg)](https://www.w3.org/TR/webauthn/)
 
 ![Passcay Logo](docs/passcay-logo.png)
 
