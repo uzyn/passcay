@@ -75,4 +75,14 @@ pub const oid = struct {
     pub const android_key_attestation = &[_]u8{ 0x2B, 0x06, 0x01, 0x04, 0x01, 0xD6, 0x79, 0x02, 0x01, 0x11 };
     /// 1.2.840.113635.100.8.2 Apple anonymous attestation nonce
     pub const apple_nonce = &[_]u8{ 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x63, 0x64, 0x08, 0x02 };
+    /// 2.5.29.17 subjectAltName
+    pub const subject_alt_name = &[_]u8{ 0x55, 0x1D, 0x11 };
+    /// 2.23.133.8.3 tcg-kp-AIKCertificate (TPM attestation EKU)
+    pub const tcg_kp_aik = &[_]u8{ 0x67, 0x81, 0x05, 0x08, 0x03 };
+    /// 2.23.133.2.1 tcg-at-tpmManufacturer
+    pub const tcg_tpm_manufacturer = &[_]u8{ 0x67, 0x81, 0x05, 0x02, 0x01 };
+    /// 2.23.133.2.2 tcg-at-tpmModel
+    pub const tcg_tpm_model = &[_]u8{ 0x67, 0x81, 0x05, 0x02, 0x02 };
+    /// 2.23.133.2.3 tcg-at-tpmVersion
+    pub const tcg_tpm_version = &[_]u8{ 0x67, 0x81, 0x05, 0x02, 0x03 };
 };

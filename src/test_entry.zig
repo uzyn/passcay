@@ -20,6 +20,7 @@ test {
     _ = @import("attestation/none.zig");
     _ = @import("attestation/packed_fmt.zig");
     _ = @import("attestation/fido_u2f.zig");
+    _ = @import("attestation/tpm.zig");
 
     // X.509 / ASN.1, JWS, MDS
     _ = @import("x509/mod.zig");

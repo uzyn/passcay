@@ -12,6 +12,7 @@ const Allocator = mem.Allocator;
 const none_fmt = @import("none.zig");
 const packed_fmt = @import("packed_fmt.zig");
 const fido_u2f = @import("fido_u2f.zig");
+const tpm_fmt = @import("tpm.zig");
 pub const mds = @import("../mds/mod.zig");
 
 /// WebAuthn attestation trust types (§6.5.3).
@@ -112,6 +113,8 @@ pub fn verify(allocator: Allocator, params: VerifyParams, policy: Policy) !Resul
         try packed_fmt.verify(allocator, params, policy)
     else if (mem.eql(u8, params.fmt, "fido-u2f"))
         try fido_u2f.verify(allocator, params, policy)
+    else if (mem.eql(u8, params.fmt, "tpm"))
+        try tpm_fmt.verify(allocator, params, policy)
     else
         return Error.UnsupportedAttestationFormat;
 

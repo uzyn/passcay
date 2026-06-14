@@ -215,6 +215,63 @@ test "conformance/fido-u2f: Yubico attestation verifies as basic" {
     try testing.expectEqualStrings(td.u2f_cred_id, result.credential_id);
 }
 
+// ===================== Positive: tpm (real Surface/webauthn.io vectors) =====================
+
+test "conformance/tpm: RSA credential key verifies as attca" {
+    const a = testing.allocator;
+    const result = try regOk(a, .{
+        .challenge = td.tpm_rsa_challenge,
+        .origin = td.tpm_rsa_origin,
+        .rp_id = td.tpm_rsa_rp_id,
+        .require_user_verification = true,
+        // Expired AIK cert: pin the clock inside its validity window; empty roots
+        // accept the chain's internal links without enforcing the MS TPM root.
+        .attestation = .{ .now_sec = td.tpm_now_sec, .roots = &.{} },
+    }, td.tpm_rsa_attobj, td.tpm_rsa_cdj);
+    defer result.deinit(a);
+
+    try testing.expectEqualStrings("tpm", result.fmt);
+    try testing.expectEqual(passcay.attestation.AttestationType.attca, result.attestation_type);
+    try testing.expectEqualStrings(td.tpm_rsa_cred_id, result.credential_id);
+}
+
+test "conformance/tpm: ECC P-256 credential key verifies as attca" {
+    const a = testing.allocator;
+    const result = try regOk(a, .{
+        .challenge = td.tpm_ecc_challenge,
+        .origin = td.tpm_ecc_origin,
+        .rp_id = td.tpm_ecc_rp_id,
+        .require_user_verification = true,
+        .attestation = .{ .now_sec = td.tpm_now_sec, .roots = &.{} },
+    }, td.tpm_ecc_attobj, td.tpm_ecc_cdj);
+    defer result.deinit(a);
+
+    try testing.expectEqualStrings("tpm", result.fmt);
+    try testing.expectEqual(passcay.attestation.AttestationType.attca, result.attestation_type);
+    try testing.expectEqualStrings(td.tpm_ecc_cred_id, result.credential_id);
+}
+
+test "conformance/tpm: tampered attestation signature is rejected" {
+    const a = testing.allocator;
+    // Flip a byte inside the attestation statement region (the leading sig blob)
+    // and require attestation: verification must fail, never silently succeed.
+    const obj = try passcay.util.decodeBase64Url(a, td.tpm_rsa_attobj);
+    defer a.free(obj);
+    const tampered = try a.dupe(u8, obj);
+    defer a.free(tampered);
+    tampered[40] ^= 0x01;
+    const tampered_b64 = try passcay.util.encodeBase64Url(a, tampered);
+    defer a.free(tampered_b64);
+
+    try testing.expect(std.meta.isError(regOk(a, .{
+        .challenge = td.tpm_rsa_challenge,
+        .origin = td.tpm_rsa_origin,
+        .rp_id = td.tpm_rsa_rp_id,
+        .require_user_verification = true,
+        .attestation = .{ .now_sec = td.tpm_now_sec, .roots = &.{} },
+    }, tampered_b64, td.tpm_rsa_cdj)));
+}
+
 // ===================== MDS-anchored full attestation =====================
 
 test "conformance/mds: AAGUID-anchored packed-full verification with status gating" {
