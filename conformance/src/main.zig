@@ -81,6 +81,38 @@ fn loadMetadata(io: std.Io, arena: std.mem.Allocator, dir_path: []const u8) ![]p
     return entries.toOwnedSlice();
 }
 
+/// Fetch a URL over HTTP(S) and return the response body (allocated in `arena`).
+fn fetchUrl(io: std.Io, gpa: std.mem.Allocator, arena: std.mem.Allocator, url: []const u8) ![]u8 {
+    var client: std.http.Client = .{ .allocator = gpa, .io = io };
+    defer client.deinit();
+    var aw: std.Io.Writer.Allocating = .init(arena);
+    const res = try client.fetch(.{ .location = .{ .url = url }, .response_writer = &aw.writer });
+    if (@intFromEnum(res.status) != 200) return error.HttpStatusNotOk;
+    return aw.written();
+}
+
+/// Load a certificate file (PEM or DER) and return DER bytes (in `arena`).
+fn loadRootCert(io: std.Io, arena: std.mem.Allocator, path: []const u8) ![]u8 {
+    const bytes = try std.Io.Dir.cwd().readFileAlloc(io, path, arena, .unlimited);
+    const begin_marker = "-----BEGIN CERTIFICATE-----";
+    const end_marker = "-----END CERTIFICATE-----";
+    const begin = std.mem.indexOf(u8, bytes, begin_marker) orelse return bytes; // already DER
+    const start = begin + begin_marker.len;
+    const end = std.mem.indexOfPos(u8, bytes, start, end_marker) orelse return error.InvalidPem;
+
+    var clean = std.array_list.Managed(u8).init(arena);
+    for (bytes[start..end]) |c| {
+        switch (c) {
+            '\n', '\r', ' ', '\t' => {},
+            else => try clean.append(c),
+        }
+    }
+    const dec = std.base64.standard.Decoder;
+    const der = try arena.alloc(u8, try dec.calcSizeForSlice(clean.items));
+    try dec.decode(der, clean.items);
+    return der;
+}
+
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
     const gpa = init.gpa;
@@ -92,6 +124,8 @@ pub fn main(init: std.process.Init) !void {
     var metadata_dir: ?[]const u8 = null;
     var now_sec: ?i64 = null;
     var verbose = false;
+    var mds_root: ?[]const u8 = null;
+    var endpoints = std.array_list.Managed([]const u8).init(arena);
 
     var args = init.minimal.args.iterate();
     _ = args.next(); // program name
@@ -106,6 +140,10 @@ pub fn main(init: std.process.Init) !void {
             if (args.next()) |p| port = std.fmt.parseInt(u16, p, 10) catch port;
         } else if (std.mem.eql(u8, a, "--now")) {
             if (args.next()) |n| now_sec = std.fmt.parseInt(i64, n, 10) catch null;
+        } else if (std.mem.eql(u8, a, "--mds-root")) {
+            mds_root = args.next();
+        } else if (std.mem.eql(u8, a, "--mds-endpoint")) {
+            if (args.next()) |u| try endpoints.append(u);
         } else if (std.mem.eql(u8, a, "--verbose")) {
             verbose = true;
         }
@@ -113,15 +151,45 @@ pub fn main(init: std.process.Init) !void {
 
     var store: passcay.mds.Store = .{ .entries = &.{} };
     var store_ptr: ?*const passcay.mds.Store = null;
+    var all_entries = std.array_list.Managed(passcay.mds.Entry).init(arena);
+
+    // Load live MDS3 blobs first so their status-bearing entries take priority
+    // over any overlapping local statement (which carry no status reports).
+    if (endpoints.items.len > 0) {
+        const root_der = loadRootCert(io, arena, mds_root orelse {
+            std.debug.print("--mds-endpoint requires --mds-root <cert>\n", .{});
+            return error.MissingMdsRoot;
+        }) catch |err| {
+            std.debug.print("failed to load --mds-root: {s}\n", .{@errorName(err)});
+            return err;
+        };
+        const anchors = [_][]const u8{root_der};
+        for (endpoints.items) |url| {
+            const blob = fetchUrl(io, gpa, arena, url) catch |err| {
+                std.debug.print("MDS3 fetch failed for {s}: {s}\n", .{ url, @errorName(err) });
+                continue;
+            };
+            const es = passcay.mds.parseBlob(arena, blob, &anchors, now_sec) catch |err| {
+                std.debug.print("MDS3 blob rejected ({s}) for {s}\n", .{ @errorName(err), url });
+                continue;
+            };
+            try all_entries.appendSlice(es);
+            std.debug.print("loaded {d} MDS3 entries from {s}\n", .{ es.len, url });
+        }
+    }
+
     if (metadata_dir) |dir_path| {
-        store.entries = loadMetadata(io, arena, dir_path) catch |err| {
+        const es = loadMetadata(io, arena, dir_path) catch |err| {
             std.debug.print("failed to load metadata from {s}: {s}\n", .{ dir_path, @errorName(err) });
             return err;
         };
+        try all_entries.appendSlice(es);
+        std.debug.print("loaded {d} metadata statement(s) from {s}\n", .{ es.len, dir_path });
+    }
+
+    if (all_entries.items.len > 0) {
+        store.entries = all_entries.items;
         store_ptr = &store;
-        // With a metadata store, enforce certificate time validity if a clock
-        // was supplied (otherwise expired-certificate tests cannot be rejected).
-        std.debug.print("loaded {d} metadata statement(s) from {s}\n", .{ store.entries.len, dir_path });
     }
 
     var app = App{ .ctx = srv.Context.init(gpa), .io = io, .verbose = verbose };

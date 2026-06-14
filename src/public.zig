@@ -92,6 +92,7 @@ pub const mds = struct {
     pub const Entry = mds_mod.Entry;
     pub const AuthenticatorStatus = mds_mod.AuthenticatorStatus;
     pub const parseStatement = mds_mod.parseStatement;
+    pub const parseBlob = mds_mod.parseBlob;
 };
 
 // Utility functions needed for demos - minimal exposure

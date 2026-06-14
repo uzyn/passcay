@@ -46,7 +46,8 @@ pub const Jws = struct {
         const alg_id = joseAlgToCose(self.alg) orelse return Error.UnsupportedJwsAlg;
 
         const leaf = x509.parse(self.x5c[0]) catch return Error.JwsSignatureInvalid;
-        const ok = x509.verifyData(leaf, alg_id, self.signature, self.signing_input) catch
+        // JOSE encodes ECDSA signatures as raw r‖s (not DER).
+        const ok = x509.verifyDataFmt(leaf, alg_id, self.signature, self.signing_input, .raw) catch
             return Error.UnsupportedJwsAlg;
         if (!ok) return Error.JwsSignatureInvalid;
 

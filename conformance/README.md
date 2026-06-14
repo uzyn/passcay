@@ -32,6 +32,9 @@ zig build run      # start the server on http://localhost:8080
 
 ```
 --metadata <dir>   load MDS3 metadata statements (*.json) as attestation trust anchors
+--mds-root <cert>  trust anchor (PEM/DER) for verifying live MDS3 blob signatures
+--mds-endpoint <url>  fetch + verify a signed MDS3 blob at startup (repeatable;
+                      requires --mds-root). Bad-signature/cert blobs are rejected.
 --origin <url>     expected origin (default http://localhost:8080)
 --rp-id <id>       expected RP ID (default localhost)
 --port <n>         listen port (default 8080)

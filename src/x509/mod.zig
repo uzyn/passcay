@@ -90,10 +90,17 @@ fn linkTime(now_sec: ?i64, subject: Cert) i64 {
     return now_sec orelse @as(i64, @intCast(subject.parsed.validity.not_before));
 }
 
+/// ECDSA signature encoding: WebAuthn uses ASN.1 DER; JOSE/JWS uses raw r‖s.
+pub const SigFormat = enum { der, raw };
+
 /// Verify a signature over `data` using this certificate's public key, for the
 /// given COSE algorithm id. Supports ECDSA (P-256/P-384) and RSA PKCS#1 v1.5
 /// (SHA-1/256/384/512). The declared algorithm must match the certificate key.
 pub fn verifyData(cert: Cert, alg_id: i32, signature: []const u8, data: []const u8) !bool {
+    return verifyDataFmt(cert, alg_id, signature, data, .der);
+}
+
+pub fn verifyDataFmt(cert: Cert, alg_id: i32, signature: []const u8, data: []const u8, fmt: SigFormat) !bool {
     const desc = alg.describe(alg_id) orelse return Error.UnsupportedAlgorithm;
     if (!desc.supported) return Error.UnsupportedAlgorithm;
     const pubkey = cert.publicKey();
@@ -104,11 +111,11 @@ pub fn verifyData(cert: Cert, alg_id: i32, signature: []const u8, data: []const 
             switch (named) {
                 .X9_62_prime256v1 => {
                     if (desc.curve != .P256) return Error.SignatureAlgorithmMismatch;
-                    return verifyEcdsa(std.crypto.sign.ecdsa.EcdsaP256Sha256, pubkey, signature, data);
+                    return verifyEcdsa(std.crypto.sign.ecdsa.EcdsaP256Sha256, pubkey, signature, data, fmt);
                 },
                 .secp384r1 => {
                     if (desc.curve != .P384) return Error.SignatureAlgorithmMismatch;
-                    return verifyEcdsa(std.crypto.sign.ecdsa.EcdsaP384Sha384, pubkey, signature, data);
+                    return verifyEcdsa(std.crypto.sign.ecdsa.EcdsaP384Sha384, pubkey, signature, data, fmt);
                 },
                 .secp521r1 => return Error.UnsupportedAlgorithm,
             }
@@ -121,9 +128,16 @@ pub fn verifyData(cert: Cert, alg_id: i32, signature: []const u8, data: []const 
     }
 }
 
-fn verifyEcdsa(comptime Scheme: type, sec1: []const u8, sig: []const u8, data: []const u8) bool {
+fn verifyEcdsa(comptime Scheme: type, sec1: []const u8, sig: []const u8, data: []const u8, fmt: SigFormat) bool {
     const pk = Scheme.PublicKey.fromSec1(sec1) catch return false;
-    const s = Scheme.Signature.fromDer(sig) catch return false;
+    const s = switch (fmt) {
+        .der => Scheme.Signature.fromDer(sig) catch return false,
+        .raw => blk: {
+            const n = Scheme.Signature.encoded_length;
+            if (sig.len != n) return false;
+            break :blk Scheme.Signature.fromBytes(sig[0..n].*);
+        },
+    };
     s.verify(data, pk) catch return false;
     return true;
 }

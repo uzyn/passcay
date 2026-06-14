@@ -12,6 +12,7 @@ pub const Error = error{
     AaguidNotInMetadata,
     AuthenticatorCompromised,
     InvalidMetadata,
+    BlobSignatureInvalid,
 };
 
 /// AuthenticatorStatus values from the FIDO Metadata Service.
@@ -101,7 +102,10 @@ const Statement = struct {
 pub fn parseStatement(arena: Allocator, json: []const u8) !Entry {
     const s = std.json.parseFromSliceLeaky(Statement, arena, json, .{ .ignore_unknown_fields = true }) catch
         return Error.InvalidMetadata;
+    return stmtToEntry(arena, s);
+}
 
+fn stmtToEntry(arena: Allocator, s: Statement) !Entry {
     const aaguid_str = s.aaguid orelse
         (if (s.metadataStatement) |ms| ms.aaguid else null) orelse return Error.InvalidMetadata;
     const roots_b64 = s.attestationRootCertificates orelse
@@ -125,6 +129,29 @@ pub fn parseStatement(arena: Allocator, json: []const u8) !Entry {
         .roots = try roots.toOwnedSlice(),
         .statuses = try statuses.toOwnedSlice(),
     };
+}
+
+/// Parse a signed MDS3 metadata BLOB (a compact JWS/JWT). Verifies the blob
+/// signature against the trust anchors (the MDS3 BLOB root), then parses the
+/// `entries` array into Entries. Entries that lack an AAGUID (e.g. U2F) are
+/// skipped. now_sec pins certificate time validity (null = lenient).
+pub fn parseBlob(arena: Allocator, blob: []const u8, anchors: []const []const u8, now_sec: ?i64) ![]Entry {
+    const jws = @import("../jws.zig");
+
+    var parsed = jws.parse(arena, blob) catch return Error.InvalidMetadata;
+    defer parsed.deinit();
+    parsed.verify(arena, anchors, now_sec) catch return Error.BlobSignatureInvalid;
+
+    const Payload = struct { entries: []const Statement = &.{} };
+    const payload = std.json.parseFromSliceLeaky(Payload, arena, parsed.payload, .{ .ignore_unknown_fields = true }) catch
+        return Error.InvalidMetadata;
+
+    var entries = std.array_list.Managed(Entry).init(arena);
+    for (payload.entries) |s| {
+        const e = stmtToEntry(arena, s) catch continue; // skip entries without an AAGUID
+        try entries.append(e);
+    }
+    return entries.toOwnedSlice();
 }
 
 fn parseUuid(s: []const u8, out: *[16]u8) !void {
