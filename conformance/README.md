@@ -37,6 +37,7 @@ zig build run      # start the server on http://localhost:8080
 --port <n>         listen port (default 8080)
 --now <unix_secs>  pin certificate time validity; pass `--now $(date +%s)` so
                    expired-certificate negative tests are rejected
+--verbose          log every request body + response (for debugging tool runs)
 ```
 
 The replay harness exercises ES256 (none) registration + assertion, fido-u2f

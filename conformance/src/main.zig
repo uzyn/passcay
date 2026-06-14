@@ -21,34 +21,40 @@ const srv = @import("server.zig");
 const App = struct {
     ctx: srv.Context,
     io: std.Io,
+    verbose: bool = false,
 
     fn challenge(self: *App, arena: std.mem.Allocator) ![]const u8 {
         return passcay.challenge.generate(self.io, arena);
     }
 
-    fn write(_: *App, res: *httpz.Response, resp: srv.Response) void {
+    fn respond(self: *App, path: []const u8, req: *httpz.Request, res: *httpz.Response, resp: srv.Response) void {
         res.status = resp.status;
         res.body = resp.body;
         res.header("content-type", "application/json");
+        if (self.verbose) {
+            std.debug.print("{s} -> {d}\n  req: {s}\n  res: {s}\n", .{ path, resp.status, req.body() orelse "", resp.body });
+        } else {
+            std.debug.print("{s} -> {d} {s}\n", .{ path, resp.status, resp.body });
+        }
     }
 };
 
 fn attestationOptions(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
     const ch = try app.challenge(res.arena);
-    app.write(res, try srv.attestationOptions(&app.ctx, res.arena, req.body() orelse "{}", ch));
+    app.respond("POST /attestation/options", req, res, try srv.attestationOptions(&app.ctx, res.arena, req.body() orelse "{}", ch));
 }
 
 fn attestationResult(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
-    app.write(res, try srv.attestationResult(&app.ctx, res.arena, req.body() orelse "{}"));
+    app.respond("POST /attestation/result", req, res, try srv.attestationResult(&app.ctx, res.arena, req.body() orelse "{}"));
 }
 
 fn assertionOptions(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
     const ch = try app.challenge(res.arena);
-    app.write(res, try srv.assertionOptions(&app.ctx, res.arena, req.body() orelse "{}", ch));
+    app.respond("POST /assertion/options", req, res, try srv.assertionOptions(&app.ctx, res.arena, req.body() orelse "{}", ch));
 }
 
 fn assertionResult(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
-    app.write(res, try srv.assertionResult(&app.ctx, res.arena, req.body() orelse "{}"));
+    app.respond("POST /assertion/result", req, res, try srv.assertionResult(&app.ctx, res.arena, req.body() orelse "{}"));
 }
 
 /// Load every *.json metadata statement in `dir_path` into MDS entries.
@@ -85,6 +91,7 @@ pub fn main(init: std.process.Init) !void {
     var rp_id: []const u8 = "localhost";
     var metadata_dir: ?[]const u8 = null;
     var now_sec: ?i64 = null;
+    var verbose = false;
 
     var args = init.minimal.args.iterate();
     _ = args.next(); // program name
@@ -99,6 +106,8 @@ pub fn main(init: std.process.Init) !void {
             if (args.next()) |p| port = std.fmt.parseInt(u16, p, 10) catch port;
         } else if (std.mem.eql(u8, a, "--now")) {
             if (args.next()) |n| now_sec = std.fmt.parseInt(i64, n, 10) catch null;
+        } else if (std.mem.eql(u8, a, "--verbose")) {
+            verbose = true;
         }
     }
 
@@ -115,7 +124,7 @@ pub fn main(init: std.process.Init) !void {
         std.debug.print("loaded {d} metadata statement(s) from {s}\n", .{ store.entries.len, dir_path });
     }
 
-    var app = App{ .ctx = srv.Context.init(gpa), .io = io };
+    var app = App{ .ctx = srv.Context.init(gpa), .io = io, .verbose = verbose };
     app.ctx.origin = origin;
     app.ctx.rp_id = rp_id;
     app.ctx.mds = store_ptr;
