@@ -188,6 +188,10 @@ For passkey authenticator implementations and library for Zig, check out [Zig-Se
 - [W3C WebAuthn](https://www.w3.org/TR/webauthn/)
 - [FIDO2 Client to Authenticator Protocol (CTAP)](https://fidoalliance.org/specs/fido-v2.0-ps-20190130/fido-client-to-authenticator-protocol-v2.0-ps-20190130.html)
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for release history.
+
 ## License
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
