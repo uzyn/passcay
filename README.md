@@ -53,7 +53,7 @@ Add `passcay` to your Zig project (`build.zig.zon`) dependencies:
 zig fetch --save git+https://github.com/uzyn/passcay.git
 
 # or load a specific version
-zig fetch --save git+https://github.com/uzyn/passcay.git#3.0.0
+zig fetch --save git+https://github.com/uzyn/passcay.git#3.1.0
 ```
 
 And update your `build.zig` to load `passcay`:
