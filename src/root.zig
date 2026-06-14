@@ -10,6 +10,11 @@ pub const register = @import("register.zig");
 pub const util = @import("util.zig");
 pub const crypto = @import("crypto.zig");
 pub const cbor = @import("cbor.zig");
+pub const alg = @import("alg.zig");
+pub const attestation = @import("attestation/mod.zig");
+pub const x509 = @import("x509/mod.zig");
+pub const jws = @import("jws.zig");
+pub const mds = @import("mds/mod.zig");
 
 pub const WebAuthnError = types.WebAuthnError;
 pub const CoseAlg = types.CoseAlg;

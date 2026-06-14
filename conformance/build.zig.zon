@@ -1,0 +1,19 @@
+.{
+    .name = .conformance,
+    .version = "0.1.0",
+    .fingerprint = 0xe81515e7170e9611,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .passcay = .{ .path = ".." },
+        .httpz = .{
+            .url = "https://github.com/karlseguin/http.zig/archive/refs/heads/master.tar.gz",
+            .hash = "httpz-0.0.0-PNVzrJrbCACyokt2AARAG7Ul7h7xlZxL7BYAdpsAs1_-",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "test",
+    },
+}

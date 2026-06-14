@@ -137,11 +137,17 @@ pub const AuthenticatorData = struct {
     }
 };
 
+pub const TokenBinding = struct {
+    status: []const u8,
+    id: ?[]const u8 = null,
+};
+
 pub const ClientDataJson = struct {
     type: []const u8,
     challenge: []const u8,
     origin: []const u8,
     crossOrigin: ?bool = false,
+    tokenBinding: ?TokenBinding = null,
 };
 
 pub const CredentialAuthData = struct {

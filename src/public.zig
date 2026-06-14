@@ -10,6 +10,10 @@ const auth_mod = @import("auth.zig");
 const register_mod = @import("register.zig");
 const util_mod = @import("util.zig");
 const types_mod = @import("types.zig");
+const attestation_mod = @import("attestation/mod.zig");
+const mds_mod = @import("mds/mod.zig");
+const jws_mod = @import("jws.zig");
+const x509_mod = @import("x509/mod.zig");
 
 // Public API - only expose the core verification functions
 pub const challenge = struct {
@@ -30,7 +34,8 @@ pub const auth = struct {
     ///
     /// Verifies an authentication assertion with customizable security checks.
     /// Always requires user presence. Sign count verification can be enabled
-    /// for replay detection. Automatically detects ES256 or RS256 algorithm.
+    /// for replay detection. The signature algorithm is taken from the
+    /// credential public key's COSE `alg`.
     ///
     /// Returns an AuthVerifyResult with the new sign count to store if verification succeeds.
     pub const verify = auth_mod.verify;
@@ -64,6 +69,47 @@ pub const register = struct {
 
     /// Use the common WebAuthnError type from types module
     pub const RegistrationError = register_mod.RegistrationError;
+};
+
+// Attestation statement verification (opt-in via register.RegVerifyExpectations.attestation)
+pub const attestation = struct {
+    /// Verify an attestation statement against a policy
+    pub const verify = attestation_mod.verify;
+
+    /// Relying party attestation policy
+    pub const Policy = attestation_mod.Policy;
+
+    /// WebAuthn attestation trust type
+    pub const AttestationType = attestation_mod.AttestationType;
+
+    /// Inputs to an attestation verifier
+    pub const VerifyParams = attestation_mod.VerifyParams;
+
+    /// Result of attestation verification
+    pub const Result = attestation_mod.Result;
+};
+
+// FIDO Metadata Service (MDS3) trust store, used to configure attestation.Policy.mds
+pub const mds = struct {
+    pub const Store = mds_mod.Store;
+    pub const Entry = mds_mod.Entry;
+    pub const AuthenticatorStatus = mds_mod.AuthenticatorStatus;
+    pub const parseStatement = mds_mod.parseStatement;
+    pub const parseBlob = mds_mod.parseBlob;
+};
+
+// Compact JWS/JWT parsing (MDS3 BLOB), exposed for revocation checking.
+pub const jws = struct {
+    pub const parse = jws_mod.parse;
+    pub const Jws = jws_mod.Jws;
+};
+
+// X.509 helpers, including CRL revocation checking for MDS3 BLOB chains.
+pub const x509 = struct {
+    pub const parse = x509_mod.parse;
+    pub const Cert = x509_mod.Cert;
+    pub const verifyChain = x509_mod.verifyChain;
+    pub const crl = x509_mod.crl;
 };
 
 // Utility functions needed for demos - minimal exposure

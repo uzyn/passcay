@@ -10,6 +10,7 @@ const util = @import("util.zig");
 /// Parse a WebAuthn attestation object from base64url-encoded CBOR data
 pub fn parseAttestationObject(allocator: Allocator, attestation_object_b64: []const u8) !AttestationObject {
     var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
     const temp_allocator = arena.allocator();
 
     const attestation_bytes = try util.decodeBase64Url(temp_allocator, attestation_object_b64);
@@ -48,8 +49,6 @@ pub fn parseAttestationObject(allocator: Allocator, attestation_object_b64: []co
     }
 
     if (fmt == null or auth_data == null) {
-        arena.deinit();
-        std.debug.print("Invalid attestation format. fmt={any}, auth_data={any}, att_stmt={any}\n", .{ fmt != null, auth_data != null, att_stmt != null });
         return error.InvalidAttestationFormat;
     }
 
@@ -59,21 +58,13 @@ pub fn parseAttestationObject(allocator: Allocator, attestation_object_b64: []co
     const auth_data_copy = try allocator.dupe(u8, auth_data.?);
     errdefer allocator.free(auth_data_copy);
 
-    var raw_att_stmt: []const u8 = undefined;
-    if (att_stmt != null) {
-        if (att_stmt.?.getType() == .Map) {
-            raw_att_stmt = try allocator.dupe(u8, &[_]u8{});
-        } else if (att_stmt.?.getType() == .ByteString) {
-            raw_att_stmt = try allocator.dupe(u8, att_stmt.?.string().?);
-        } else {
-            raw_att_stmt = try allocator.dupe(u8, &[_]u8{});
-        }
-    } else {
-        raw_att_stmt = try allocator.dupe(u8, &[_]u8{});
-    }
+    // Retain the raw CBOR bytes of the attestation statement so attestation
+    // verifiers can inspect it. zbor slices each map value to its exact bytes.
+    const raw_att_stmt = if (att_stmt) |stmt|
+        try allocator.dupe(u8, stmt.data)
+    else
+        try allocator.dupe(u8, &[_]u8{});
     errdefer allocator.free(raw_att_stmt);
-
-    arena.deinit();
 
     return AttestationObject{
         .fmt = fmt_copy,
@@ -145,10 +136,20 @@ pub fn parseAuthenticatorData(allocator: Allocator, auth_data: []const u8) !Auth
                 errdefer if (result.credential_id != null) allocator.free(result.credential_id.?);
                 pos += id_len;
 
-                // The credential public key follows and is a CBOR-encoded structure
+                // The credential public key follows and is a CBOR-encoded
+                // COSE_Key, optionally followed by an extensions CBOR map when
+                // the ED flag (0x80) is set. Nothing may follow that — any
+                // trailing bytes mean malformed authenticator data.
                 if (pos < auth_data.len) {
-                    const credential_public_key = auth_data[pos..auth_data.len];
-                    result.credential_public_key = try allocator.dupe(u8, credential_public_key);
+                    const region = auth_data[pos..auth_data.len];
+                    var consumed: usize = 0;
+                    if (zbor.advance(region, &consumed) == null) return error.InvalidCoseKey;
+                    const key_len = consumed;
+                    if ((flags & 0x80) != 0) {
+                        if (zbor.advance(region, &consumed) == null) return error.InvalidAuthenticatorData;
+                    }
+                    if (consumed != region.len) return error.InvalidAuthenticatorData;
+                    result.credential_public_key = try allocator.dupe(u8, region[0..key_len]);
                     errdefer if (result.credential_public_key != null) allocator.free(result.credential_public_key.?);
                 }
             }
@@ -200,6 +201,14 @@ pub fn parseCoseKey(allocator: Allocator, key_cbor: []const u8) !CoseKeyParamete
     var y: ?[]const u8 = null;
     var n: ?[]const u8 = null;
     var e: ?[]const u8 = null;
+    // Free any component already duped if a later allocation (or a missing key
+    // type) makes us return an error below.
+    errdefer {
+        if (x) |v| allocator.free(v);
+        if (y) |v| allocator.free(v);
+        if (n) |v| allocator.free(v);
+        if (e) |v| allocator.free(v);
+    }
 
     var map_iter = map;
     while (map_iter.next()) |pair| {
@@ -217,12 +226,9 @@ pub fn parseCoseKey(allocator: Allocator, key_cbor: []const u8) !CoseKeyParamete
                 },
                 3 => { // alg (algorithm)
                     if (pair.value.getType() != .Int) continue;
-                    const alg_int = pair.value.int().?;
-                    // We only support ES256 and RS256
-                    const alg_val = @as(i32, @intCast(alg_int));
-                    if (alg_val == -7 or alg_val == -257) {
-                        algorithm = @enumFromInt(alg_val);
-                    }
+                    // Record any COSE algorithm; support is enforced downstream.
+                    const alg_val = std.math.cast(i32, pair.value.int().?) orelse continue;
+                    algorithm = @enumFromInt(alg_val);
                 },
                 -1 => { // crv (curve) or n (RSA modulus) depending on key type
                     if (key_type) |kt| {
@@ -269,14 +275,8 @@ pub fn parseCoseKey(allocator: Allocator, key_cbor: []const u8) !CoseKeyParamete
         }
     }
 
-    // Verify we have the required key type
+    // Verify we have the required key type (errdefer above frees components).
     if (key_type == null) {
-        // Free any allocated memory
-        if (x) |x_val| allocator.free(x_val);
-        if (y) |y_val| allocator.free(y_val);
-        if (n) |n_val| allocator.free(n_val);
-        if (e) |e_val| allocator.free(e_val);
-
         return error.InvalidCoseKey;
     }
 
@@ -491,6 +491,15 @@ test "parseAttestationObject basic functionality" {
 
     try testing.expectEqualStrings("none", result.fmt);
     try testing.expectEqual(@as(usize, 37), result.auth_data.len);
+}
+
+test "parseAttestationObject frees its arena on malformed (non-map) input" {
+    const testing = std.testing;
+    // Valid base64url that decodes to bytes which are not a CBOR map. The error
+    // path must not leak the internal arena (testing.allocator would report it).
+    const b64 = try util.encodeBase64Url(testing.allocator, &[_]u8{ 0x01, 0x02, 0x03 });
+    defer testing.allocator.free(b64);
+    try testing.expectError(error.InvalidAttestationFormat, parseAttestationObject(testing.allocator, b64));
 }
 
 test "parseCoseKey with EC2/P-256 key" {

@@ -123,7 +123,8 @@ pub const AuthVerifyResult = struct {
 ///
 /// Verifies an authentication assertion with customizable security checks.
 /// Always requires user presence. Sign count verification can be enabled
-/// for replay detection. Automatically detects ES256 or RS256 algorithm.
+/// for replay detection. The signature algorithm is taken from the credential
+/// public key's COSE `alg` (the full registry in `alg.zig`).
 ///
 /// User presence verification is always required. Security checks that can be controlled:
 /// - Challenge, origin and RP ID verification

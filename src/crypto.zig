@@ -26,145 +26,114 @@ pub fn sha256(data: []const u8, out: *[32]u8, _: anytype) void {
 pub const CoseAlg = types.CoseAlg;
 pub const VerifyError = types.VerifyError;
 
-/// Detect algorithm from a CBOR-encoded public key
-/// Explicitly identifies the algorithm by parsing the CBOR structure
-/// Returns ES256 or RS256 if supported, or an error otherwise
-pub fn getAlgorithm(key_bytes: []const u8) !CoseAlg {
+/// COSE algorithm id (the `alg` label, 3) from a CBOR-encoded public key.
+pub fn getAlgorithmId(key_bytes: []const u8) !i32 {
     if (key_bytes.len < 4) return VerifyError.InvalidKeyFormat;
-
     var data_item = try cbor.DataItem.new(key_bytes);
     if (data_item.getType() != .Map) return VerifyError.InvalidKeyFormat;
 
-    const map = data_item.map().?;
-
-    // Look for the algorithm identifier (key = 3)
-    var map_iter = map;
+    var map_iter = data_item.map().?;
     while (map_iter.next()) |pair| {
-        if (pair.key.getType() == .Int) {
-            const key_int = pair.key.int().?;
-
-            if (key_int == 3) { // 3 is the key for algorithm
-                if (pair.value.getType() != .Int) continue;
-                const alg_int = pair.value.int().?;
-                if (alg_int == -7) return CoseAlg.ES256;
-                if (alg_int == -257) return CoseAlg.RS256;
-                return VerifyError.UnsupportedAlgorithm;
-            }
+        if (pair.key.getType() == .Int and pair.key.int().? == 3) {
+            if (pair.value.getType() != .Int) continue;
+            return std.math.cast(i32, pair.value.int().?) orelse return VerifyError.UnsupportedAlgorithm;
         }
     }
     return VerifyError.UnsupportedAlgorithm;
 }
 
-/// Verify a signature using ES256 algorithm (ECDSA with P-256 curve and SHA-256)
-fn verifyES256(_: Allocator, public_key_bytes: []const u8, data: []const u8, signature: []const u8) !bool {
-    var data_item = try cbor.DataItem.new(public_key_bytes);
+/// Verify a signature using a raw CBOR-encoded COSE public key. The algorithm
+/// is detected from the key's `alg` label and dispatched to the matching
+/// scheme. Returns true on a valid signature.
+pub fn verifyWithCoseKey(allocator: Allocator, cose_key_bytes: []const u8, signature: []const u8, data: []const u8) !bool {
+    const key = try passcay.cbor.parseCoseKey(allocator, cose_key_bytes);
+    defer key.deinit(allocator);
 
-    if (data_item.getType() != .Map) {
-        return VerifyError.CBORParsingFailed;
-    }
+    const alg_id: i32 = if (key.algorithm) |a| @intFromEnum(a) else return VerifyError.UnsupportedAlgorithm;
+    const desc = passcay.alg.describe(alg_id) orelse return VerifyError.UnsupportedAlgorithm;
+    if (!desc.supported) return VerifyError.UnsupportedAlgorithm;
 
-    const map = data_item.map().?;
+    return switch (desc.scheme) {
+        .ecdsa => verifyEcdsa(desc, key, data, signature),
+        .eddsa => verifyEddsa(key, data, signature),
+        .rsa_pkcs1 => verifyRsa(desc, key, data, signature, false),
+        .rsa_pss => verifyRsa(desc, key, data, signature, true),
+    };
+}
 
-    var x_bytes: ?[]const u8 = null;
-    var y_bytes: ?[]const u8 = null;
+fn verifyEcdsa(desc: passcay.alg.Descriptor, key: passcay.cbor.CoseKeyParameters, data: []const u8, signature: []const u8) !bool {
+    if (key.key_type != .EC2) return VerifyError.UnsupportedKeyType;
+    const x = key.x orelse return VerifyError.MissingKeyComponent;
+    const y = key.y orelse return VerifyError.MissingKeyComponent;
+    const curve = desc.curve orelse return VerifyError.UnsupportedCurve;
+    return switch (curve) {
+        .P256 => verifyEcdsaCurve(crypto.sign.ecdsa.EcdsaP256Sha256, 32, x, y, data, signature),
+        .P384 => verifyEcdsaCurve(crypto.sign.ecdsa.EcdsaP384Sha384, 48, x, y, data, signature),
+        .SECP256K1 => verifyEcdsaCurve(crypto.sign.ecdsa.EcdsaSecp256k1Sha256, 32, x, y, data, signature),
+        else => VerifyError.UnsupportedCurve,
+    };
+}
 
-    var map_iter = map;
-    while (map_iter.next()) |pair| {
-        if (pair.key.getType() == .Int) {
-            const key_int = pair.key.int().?;
-
-            if (key_int == -2) { // x coordinate
-                if (pair.value.getType() == .ByteString) {
-                    x_bytes = pair.value.string().?;
-                }
-            } else if (key_int == -3) { // y coordinate
-                if (pair.value.getType() == .ByteString) {
-                    y_bytes = pair.value.string().?;
-                }
-            }
-        }
-    }
-
-    if (x_bytes == null or y_bytes == null) {
-        return VerifyError.MissingKeyComponent;
-    }
-
-    const Ecdsa = crypto.sign.ecdsa.EcdsaP256Sha256;
-    const coord_len = 32;
-
-    if (x_bytes.?.len > coord_len or y_bytes.?.len > coord_len) {
-        return VerifyError.InvalidPublicKey;
-    }
-
-    // SEC1 uncompressed point: 0x04 || x || y, left-padding each coordinate to
-    // 32 bytes (COSE normally provides exactly 32).
-    var sec1: [1 + 2 * coord_len]u8 = undefined;
+fn verifyEcdsaCurve(comptime Scheme: type, comptime flen: usize, x: []const u8, y: []const u8, data: []const u8, signature: []const u8) !bool {
+    if (x.len > flen or y.len > flen) return VerifyError.InvalidPublicKey;
+    // SEC1 uncompressed point: 0x04 || x || y, left-padding each coordinate.
+    var sec1: [1 + 2 * flen]u8 = undefined;
     sec1[0] = 0x04;
     @memset(sec1[1..], 0);
-    @memcpy(sec1[1 + coord_len - x_bytes.?.len .. 1 + coord_len], x_bytes.?);
-    @memcpy(sec1[1 + 2 * coord_len - y_bytes.?.len ..], y_bytes.?);
+    @memcpy(sec1[1 + flen - x.len .. 1 + flen], x);
+    @memcpy(sec1[1 + 2 * flen - y.len ..], y);
 
-    const pk = Ecdsa.PublicKey.fromSec1(&sec1) catch return VerifyError.InvalidPublicKey;
-    const sig = Ecdsa.Signature.fromDer(signature) catch return false;
+    const pk = Scheme.PublicKey.fromSec1(&sec1) catch return VerifyError.InvalidPublicKey;
+    const sig = Scheme.Signature.fromDer(signature) catch return false;
     sig.verify(data, pk) catch return false;
     return true;
 }
 
-/// Verify a signature with RS256 (RSA with SHA-256) algorithm
-fn verifyRS256(_: Allocator, public_key_bytes: []const u8, data: []const u8, signature: []const u8) !bool {
-    var data_item = try cbor.DataItem.new(public_key_bytes);
+fn verifyEddsa(key: passcay.cbor.CoseKeyParameters, data: []const u8, signature: []const u8) !bool {
+    if (key.key_type != .OKP) return VerifyError.UnsupportedKeyType;
+    const x = key.x orelse return VerifyError.MissingKeyComponent;
+    const Ed = crypto.sign.Ed25519;
+    if (x.len != Ed.PublicKey.encoded_length) return VerifyError.InvalidPublicKey;
+    if (signature.len != Ed.Signature.encoded_length) return false;
 
-    if (data_item.getType() != .Map) {
-        return VerifyError.CBORParsingFailed;
-    }
+    const pk = Ed.PublicKey.fromBytes(x[0..Ed.PublicKey.encoded_length].*) catch return VerifyError.InvalidPublicKey;
+    const sig = Ed.Signature.fromBytes(signature[0..Ed.Signature.encoded_length].*);
+    sig.verify(data, pk) catch return false;
+    return true;
+}
 
-    const map = data_item.map().?;
-
-    var n_bytes: ?[]const u8 = null;
-    var e_bytes: ?[]const u8 = null;
-
-    var map_iter = map;
-    while (map_iter.next()) |pair| {
-        if (pair.key.getType() == .Int) {
-            const key_int = pair.key.int().?;
-
-            if (key_int == -1) { // n (modulus)
-                if (pair.value.getType() == .ByteString) {
-                    n_bytes = pair.value.string().?;
-                }
-            } else if (key_int == -2) { // e (exponent)
-                if (pair.value.getType() == .ByteString) {
-                    e_bytes = pair.value.string().?;
-                }
-            }
-        }
-    }
-
-    if (n_bytes == null or e_bytes == null) {
-        return VerifyError.MissingKeyComponent;
-    }
-
-    // Strip leading zero bytes (DER positive-integer padding) from the modulus
-    // and exponent.
-    const n = mem.trimStart(u8, n_bytes.?, "\x00");
-    const e = mem.trimStart(u8, e_bytes.?, "\x00");
+fn verifyRsa(desc: passcay.alg.Descriptor, key: passcay.cbor.CoseKeyParameters, data: []const u8, signature: []const u8, comptime pss: bool) !bool {
+    if (key.key_type != .RSA) return VerifyError.UnsupportedKeyType;
+    const n_raw = key.n orelse return VerifyError.MissingKeyComponent;
+    const e_raw = key.e orelse return VerifyError.MissingKeyComponent;
+    // Strip leading zero bytes (DER positive-integer padding).
+    const n = mem.trimStart(u8, n_raw, "\x00");
+    const e = mem.trimStart(u8, e_raw, "\x00");
 
     const rsa = crypto.Certificate.rsa;
-    const Sha256 = crypto.hash.sha2.Sha256;
-
     const pk = rsa.PublicKey.fromBytes(e, n) catch return VerifyError.InvalidPublicKey;
+    return switch (desc.hash) {
+        .sha1 => verifyRsaHash(pk, signature, data, crypto.hash.Sha1, pss),
+        .sha256 => verifyRsaHash(pk, signature, data, crypto.hash.sha2.Sha256, pss),
+        .sha384 => verifyRsaHash(pk, signature, data, crypto.hash.sha2.Sha384, pss),
+        .sha512 => verifyRsaHash(pk, signature, data, crypto.hash.sha2.Sha512, pss),
+    };
+}
 
-    // PKCS1v1_5Signature.verify takes a comptime modulus length and a
-    // fixed-size signature; the signature length equals the RSA key size.
+fn verifyRsaHash(pk: crypto.Certificate.rsa.PublicKey, signature: []const u8, data: []const u8, comptime Hash: type, comptime pss: bool) bool {
+    const rsa = crypto.Certificate.rsa;
     inline for (.{ 256, 384, 512 }) |klen| {
         if (signature.len == klen) {
             const sig: [klen]u8 = signature[0..klen].*;
-            rsa.PKCS1v1_5Signature.verify(klen, sig, data, pk, Sha256) catch return false;
+            if (pss) {
+                rsa.PSSSignature.verify(klen, sig, data, pk, Hash) catch return false;
+            } else {
+                rsa.PKCS1v1_5Signature.verify(klen, sig, data, pk, Hash) catch return false;
+            }
             return true;
         }
     }
-
-    return VerifyError.InvalidSignature;
+    return false;
 }
 
 pub fn verifySignature(allocator: Allocator, public_key_base64url: []const u8, signature: []const u8, data: []const u8) !bool {
@@ -176,13 +145,7 @@ pub fn verifySignature(allocator: Allocator, public_key_base64url: []const u8, s
     _ = try decoder.decode(key_buf, public_key_base64url);
     const key_bytes = key_buf[0..key_size];
 
-    const algorithm = try getAlgorithm(key_bytes);
-
-    return switch (algorithm) {
-        .ES256 => try verifyES256(allocator, key_bytes, data, signature),
-        .RS256 => try verifyRS256(allocator, key_bytes, data, signature),
-        else => VerifyError.UnsupportedAlgorithm,
-    };
+    return verifyWithCoseKey(allocator, key_bytes, signature, data);
 }
 
 pub fn verifyBase64Url(allocator: Allocator, public_key_base64url: []const u8, signature_base64url: []const u8, data_base64url: []const u8) !bool {

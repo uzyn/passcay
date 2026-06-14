@@ -1,0 +1,24 @@
+Passcay — third-party test vector attributions
+==============================================
+
+The Passcay library is original work. Some test vectors used only by the test
+suite (not shipped in the library binary) are borrowed from other open-source
+WebAuthn projects under permissive licenses. Each is reproduced solely to verify
+interoperable verification behaviour.
+
+- fido-u2f attestation vector (Yubico authenticator)
+  Source: duo-labs/py_webauthn — tests/test_verify_registration_response_fido_u2f.py
+  License: BSD-3-Clause
+  Used in: src/test_data.zig (u2f_reg_*), conformance/test/replay.zig
+
+- tpm attestation vectors (Intel/Surface RSA, Nuvoton/webauthn.io ECC P-256)
+  Source: MasterKale/py_webauthn — tests/test_verify_registration_response_tpm.py
+  License: BSD-3-Clause
+  Used in: src/test_data.zig (tpm_rsa_*, tpm_ecc_*)
+
+The ES256 and RS256 WebAuthn vectors originate from this project's own test
+fixtures (CLAUDE.md). The RSA algorithm vectors (PS256/RS384/RS1), the MDS-style
+JWT (src/testdata/mds_test.jwt), the CRL revocation fixtures
+(src/testdata/test_crl*.der), and the X.509 RSA-PSS / Ed25519 certificate+
+signature fixtures (src/testdata/test_pss_*, test_ed25519_*) were generated
+locally with OpenSSL.
