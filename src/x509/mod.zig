@@ -9,6 +9,7 @@ const Allocator = std.mem.Allocator;
 const Certificate = std.crypto.Certificate;
 
 pub const asn1 = @import("asn1.zig");
+pub const crl = @import("crl.zig");
 const alg = @import("../alg.zig");
 
 pub const Error = error{

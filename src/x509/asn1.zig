@@ -77,6 +77,8 @@ pub const oid = struct {
     pub const apple_nonce = &[_]u8{ 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x63, 0x64, 0x08, 0x02 };
     /// 2.5.29.17 subjectAltName
     pub const subject_alt_name = &[_]u8{ 0x55, 0x1D, 0x11 };
+    /// 2.5.29.31 cRLDistributionPoints
+    pub const crl_distribution_points = &[_]u8{ 0x55, 0x1D, 0x1F };
     /// 2.23.133.8.3 tcg-kp-AIKCertificate (TPM attestation EKU)
     pub const tcg_kp_aik = &[_]u8{ 0x67, 0x81, 0x05, 0x08, 0x03 };
     /// 2.23.133.2.1 tcg-at-tpmManufacturer

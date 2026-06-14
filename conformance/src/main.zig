@@ -91,6 +91,33 @@ fn fetchUrl(io: std.Io, gpa: std.mem.Allocator, arena: std.mem.Allocator, url: [
     return aw.written();
 }
 
+/// Whether any certificate in an MDS3 BLOB's JWS signing chain is revoked, per
+/// the CRL named in that certificate's cRLDistributionPoints extension. The CRL
+/// is fetched live and verified against its issuer; a revocation is honoured
+/// unless the CRL signature is present, supported, and invalid (FIDO Metadata
+/// Service BLOB processing — conformance MDS3 F-4 / F-5).
+fn blobChainRevoked(io: std.Io, gpa: std.mem.Allocator, arena: std.mem.Allocator, blob: []const u8, root_der: []const u8) bool {
+    var jws = passcay.jws.parse(arena, blob) catch return false;
+    defer jws.deinit();
+    const chain = jws.x5c;
+    for (chain, 0..) |cert_der, k| {
+        const url = passcay.x509.crl.distributionUrl(cert_der) orelse continue;
+        const crl_der = fetchUrl(io, gpa, arena, url) catch {
+            std.debug.print("  CRL fetch failed for {s}\n", .{url});
+            continue;
+        };
+        const c = passcay.x509.crl.parse(crl_der) catch continue;
+        const serial = passcay.x509.crl.serialNumber(cert_der) catch continue;
+        if (!c.isRevoked(serial)) continue;
+        // Revoked. Honour unless we can prove the CRL signature is invalid.
+        const issuer_der = if (k + 1 < chain.len) chain[k + 1] else root_der;
+        const issuer = passcay.x509.parse(issuer_der) catch return true;
+        const valid = c.verifiedBy(issuer) catch return true; // unsupported alg → fail safe
+        if (valid) return true;
+    }
+    return false;
+}
+
 /// Load a certificate file (PEM or DER) and return DER bytes (in `arena`).
 fn loadRootCert(io: std.Io, arena: std.mem.Allocator, path: []const u8) ![]u8 {
     const bytes = try std.Io.Dir.cwd().readFileAlloc(io, path, arena, .unlimited);
@@ -173,6 +200,10 @@ pub fn main(init: std.process.Init) !void {
                 std.debug.print("MDS3 blob rejected ({s}) for {s}\n", .{ @errorName(err), url });
                 continue;
             };
+            if (blobChainRevoked(io, gpa, arena, blob, root_der)) {
+                std.debug.print("MDS3 blob rejected (signing certificate revoked) for {s}\n", .{url});
+                continue;
+            }
             try all_entries.appendSlice(es);
             std.debug.print("loaded {d} MDS3 entries from {s}\n", .{ es.len, url });
         }

@@ -25,6 +25,7 @@ test {
     // X.509 / ASN.1, JWS, MDS
     _ = @import("x509/mod.zig");
     _ = @import("x509/asn1.zig");
+    _ = @import("x509/crl.zig");
     _ = @import("jws.zig");
     _ = @import("mds/mod.zig");
 

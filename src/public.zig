@@ -12,6 +12,8 @@ const util_mod = @import("util.zig");
 const types_mod = @import("types.zig");
 const attestation_mod = @import("attestation/mod.zig");
 const mds_mod = @import("mds/mod.zig");
+const jws_mod = @import("jws.zig");
+const x509_mod = @import("x509/mod.zig");
 
 // Public API - only expose the core verification functions
 pub const challenge = struct {
@@ -93,6 +95,20 @@ pub const mds = struct {
     pub const AuthenticatorStatus = mds_mod.AuthenticatorStatus;
     pub const parseStatement = mds_mod.parseStatement;
     pub const parseBlob = mds_mod.parseBlob;
+};
+
+// Compact JWS/JWT parsing (MDS3 BLOB), exposed for revocation checking.
+pub const jws = struct {
+    pub const parse = jws_mod.parse;
+    pub const Jws = jws_mod.Jws;
+};
+
+// X.509 helpers, including CRL revocation checking for MDS3 BLOB chains.
+pub const x509 = struct {
+    pub const parse = x509_mod.parse;
+    pub const Cert = x509_mod.Cert;
+    pub const verifyChain = x509_mod.verifyChain;
+    pub const crl = x509_mod.crl;
 };
 
 // Utility functions needed for demos - minimal exposure

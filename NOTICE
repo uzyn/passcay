@@ -11,6 +11,12 @@ interoperable verification behaviour.
   License: BSD-3-Clause
   Used in: src/test_data.zig (u2f_reg_*), conformance/test/replay.zig
 
+- tpm attestation vectors (Intel/Surface RSA, Nuvoton/webauthn.io ECC P-256)
+  Source: MasterKale/py_webauthn — tests/test_verify_registration_response_tpm.py
+  License: BSD-3-Clause
+  Used in: src/test_data.zig (tpm_rsa_*, tpm_ecc_*)
+
 The ES256 and RS256 WebAuthn vectors originate from this project's own test
-fixtures (CLAUDE.md). The RSA algorithm vectors (PS256/RS384/RS1) and the
-MDS-style JWT (src/testdata/mds_test.jwt) were generated locally with OpenSSL.
+fixtures (CLAUDE.md). The RSA algorithm vectors (PS256/RS384/RS1), the MDS-style
+JWT (src/testdata/mds_test.jwt), and the CRL revocation fixtures
+(src/testdata/test_crl*.der) were generated locally with OpenSSL.
