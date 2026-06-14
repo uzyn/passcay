@@ -175,25 +175,32 @@ pub fn verify(allocator: mem.Allocator, input: RegVerifyInput, expectations: Reg
     const key_params = try passcay.cbor.parseCoseKey(allocator, credential_public_key);
     defer key_params.deinit(allocator);
 
-    var cose_alg: passcay.crypto.CoseAlg = undefined;
-
-    switch (key_params.key_type) {
-        .EC2 => {
-            if (key_params.curve != .P256) {
-                return error.InvalidCoseKey;
-            }
-            if (key_params.x == null or key_params.y == null) {
-                return error.InvalidCoseKey;
-            }
-            cose_alg = .ES256;
-        },
-        .RSA => {
-            if (key_params.n == null or key_params.e == null) {
-                return error.InvalidCoseKey;
-            }
-            cose_alg = .RS256;
-        },
+    // Validate the credential public key uses a supported algorithm and has
+    // the components its scheme requires.
+    const cred_alg_id: i32 = if (key_params.algorithm) |a|
+        @intFromEnum(a)
+    else switch (key_params.key_type) {
+        .EC2 => if (key_params.curve == .P256) @as(i32, -7) else return error.UnsupportedKeyType,
+        .RSA => @as(i32, -257),
         else => return error.UnsupportedKeyType,
+    };
+    const cred_desc = passcay.alg.describe(cred_alg_id) orelse return error.InvalidCoseKey;
+    if (!cred_desc.supported) return error.UnsupportedAlgorithm;
+    switch (cred_desc.key_kind) {
+        .ec2 => {
+            if (key_params.key_type != .EC2) return error.InvalidCoseKey;
+            if (key_params.x == null or key_params.y == null) return error.InvalidCoseKey;
+            if (key_params.curve != cred_desc.curve) return error.InvalidCoseKey;
+        },
+        .rsa => {
+            if (key_params.key_type != .RSA) return error.InvalidCoseKey;
+            if (key_params.n == null or key_params.e == null) return error.InvalidCoseKey;
+        },
+        .okp => {
+            if (key_params.key_type != .OKP) return error.InvalidCoseKey;
+            if (key_params.x == null) return error.InvalidCoseKey;
+            if (key_params.curve != cred_desc.curve) return error.InvalidCoseKey;
+        },
     }
 
     var attestation_type: passcay.attestation.AttestationType = .none;
