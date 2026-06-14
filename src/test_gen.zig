@@ -23,12 +23,12 @@ pub const Options = struct {
     /// Authenticator data flags (UP | UV | AT by default).
     flags: u8 = 0x45,
     /// Deterministic key seed.
-    seed: [32]u8 = [_]u8{7} ** 32,
+    seed: [32]u8 = @splat(7),
     /// Challenge string as it appears (verbatim) in clientDataJSON.
     challenge: []const u8 = "Y29uZm9ybWFuY2UtdGVzdC1jaGFsbGVuZ2U",
     origin: []const u8 = "http://localhost:8080",
     rp_id: []const u8 = "localhost",
-    aaguid: [16]u8 = [_]u8{0} ** 16,
+    aaguid: [16]u8 = @splat(0),
     credential_id: []const u8 = "passcay-test-credential-id-0001",
 };
 

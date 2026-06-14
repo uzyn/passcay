@@ -166,16 +166,18 @@ fn decodeStdBase64(allocator: Allocator, encoded: []const u8) ![]u8 {
 
 test "mds store lookup and status gating" {
     const aaguid = [_]u8{ 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8 };
+    const all_ff: [16]u8 = @splat(0xFF);
+    const absent: [16]u8 = @splat(0xAB);
     const root = [_]u8{ 0x30, 0x00 };
     const ok_entry = Entry{ .aaguid = aaguid, .roots = &.{&root}, .statuses = &.{.fido_certified} };
-    const bad_entry = Entry{ .aaguid = [_]u8{0xFF} ** 16, .roots = &.{}, .statuses = &.{.revoked} };
+    const bad_entry = Entry{ .aaguid = all_ff, .roots = &.{}, .statuses = &.{.revoked} };
 
     const store = Store{ .entries = &.{ ok_entry, bad_entry } };
 
     try std.testing.expect(store.lookup(&aaguid) != null);
-    try std.testing.expect(store.lookup(&([_]u8{0xAB} ** 16)) == null);
+    try std.testing.expect(store.lookup(&absent) == null);
     try Store.checkStatus(store.lookup(&aaguid).?);
-    try std.testing.expectError(Error.AuthenticatorCompromised, Store.checkStatus(store.lookup(&([_]u8{0xFF} ** 16)).?));
+    try std.testing.expectError(Error.AuthenticatorCompromised, Store.checkStatus(store.lookup(&all_ff).?));
 }
 
 test "mds parse a metadata BLOB entry JSON" {

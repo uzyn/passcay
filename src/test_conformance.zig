@@ -255,7 +255,7 @@ test "conformance/mds: AAGUID-anchored packed-full verification with status gati
 
     // Negative: AAGUID absent from the metadata store.
     {
-        const other = passcay.mds.Entry{ .aaguid = [_]u8{0xFF} ** 16, .roots = &roots, .statuses = &.{.fido_certified} };
+        const other = passcay.mds.Entry{ .aaguid = @splat(0xFF), .roots = &roots, .statuses = &.{.fido_certified} };
         const store = passcay.mds.Store{ .entries = &.{other} };
         try testing.expectError(error.AttestationAaguidUnknown, regOk(a, exp.make(&store), td.rs256_reg_attobj, td.rs256_reg_cdj));
     }

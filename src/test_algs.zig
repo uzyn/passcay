@@ -105,7 +105,7 @@ const msg = "passcay algorithm conformance message";
 test "alg/EdDSA: Ed25519 (-8) round-trip" {
     const a = testing.allocator;
     const Ed = std.crypto.sign.Ed25519;
-    const kp = try Ed.KeyPair.generateDeterministic([_]u8{0x11} ** 32);
+    const kp = try Ed.KeyPair.generateDeterministic(@splat(0x11));
     const sig = (try kp.sign(msg, null)).toBytes();
 
     const key = try coseOkp(a, -8, 6, &kp.public_key.toBytes()); // crv 6 = Ed25519
@@ -116,7 +116,7 @@ test "alg/EdDSA: Ed25519 (-8) round-trip" {
 test "alg/ES384: ECDSA P-384 (-35) round-trip" {
     const a = testing.allocator;
     const Ec = std.crypto.sign.ecdsa.EcdsaP384Sha384;
-    const kp = try Ec.KeyPair.generateDeterministic([_]u8{0x22} ** 48);
+    const kp = try Ec.KeyPair.generateDeterministic(@splat(0x22));
     const sec1 = kp.public_key.toUncompressedSec1(); // 0x04 || x(48) || y(48)
 
     var der_buf: [Ec.Signature.der_encoded_length_max]u8 = undefined;
@@ -130,7 +130,7 @@ test "alg/ES384: ECDSA P-384 (-35) round-trip" {
 test "alg/ES256K: secp256k1 (-47) round-trip" {
     const a = testing.allocator;
     const Ec = std.crypto.sign.ecdsa.EcdsaSecp256k1Sha256;
-    const kp = try Ec.KeyPair.generateDeterministic([_]u8{0x33} ** 32);
+    const kp = try Ec.KeyPair.generateDeterministic(@splat(0x33));
     const sec1 = kp.public_key.toUncompressedSec1();
 
     var der_buf: [Ec.Signature.der_encoded_length_max]u8 = undefined;
@@ -177,9 +177,9 @@ test "alg/ES512: P-521 (-36) is reported unsupported (documented std gap)" {
     const a = testing.allocator;
     // A well-formed EC2 key labelled ES512 must be rejected as unsupported,
     // not silently mis-verified — P-521 is absent from std.crypto.
-    const dummy = [_]u8{0} ** 66;
+    const dummy: [66]u8 = @splat(0);
     const key = try coseEc2(a, -36, 3, &dummy, &dummy); // crv 3 = P-521
     defer a.free(key);
-    const sig = [_]u8{0} ** 132;
+    const sig: [132]u8 = @splat(0);
     try testing.expectError(error.UnsupportedAlgorithm, crypto.verifyWithCoseKey(a, key, &sig, msg));
 }
