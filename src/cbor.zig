@@ -138,10 +138,18 @@ pub fn parseAuthenticatorData(allocator: Allocator, auth_data: []const u8) !Auth
                 errdefer if (result.credential_id != null) allocator.free(result.credential_id.?);
                 pos += id_len;
 
-                // The credential public key follows and is a CBOR-encoded structure
+                // The credential public key follows and is a CBOR-encoded
+                // COSE_Key. Determine its exact length so trailing bytes can be
+                // detected: without extension data (ED flag 0x80) nothing may
+                // follow it.
                 if (pos < auth_data.len) {
-                    const credential_public_key = auth_data[pos..auth_data.len];
-                    result.credential_public_key = try allocator.dupe(u8, credential_public_key);
+                    const region = auth_data[pos..auth_data.len];
+                    var key_len: usize = 0;
+                    if (zbor.advance(region, &key_len) == null) return error.InvalidCoseKey;
+                    if ((flags & 0x80) == 0 and key_len != region.len) {
+                        return error.InvalidAuthenticatorData;
+                    }
+                    result.credential_public_key = try allocator.dupe(u8, region[0..key_len]);
                     errdefer if (result.credential_public_key != null) allocator.free(result.credential_public_key.?);
                 }
             }

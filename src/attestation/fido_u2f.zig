@@ -41,6 +41,11 @@ pub fn verify(allocator: Allocator, params: m.VerifyParams, policy: m.Policy) !m
     if (cert0.getType() != .ByteString) return m.Error.InvalidAttestationStatement;
     const cert_der = cert0.string() orelse return m.Error.InvalidAttestationStatement;
 
+    // U2F authenticators have no AAGUID; it MUST be all zeros (§8.6).
+    for (params.aaguid) |b| {
+        if (b != 0) return m.Error.AttestationAaguidMismatch;
+    }
+
     // Credential public key must be EC2 / P-256; reconstruct the U2F public key.
     const key = cbor.parseCoseKey(allocator, params.credential_public_key) catch
         return m.Error.InvalidAttestationStatement;

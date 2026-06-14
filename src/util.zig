@@ -59,6 +59,17 @@ pub fn parseClientDataJsonBytes(allocator: Allocator, json_bytes: []const u8) !t
 
     const client_data = parsed_json.value;
 
+    // If tokenBinding is present, its status must be a recognized value.
+    // (A non-object tokenBinding or a missing status fail JSON parsing above.)
+    if (client_data.tokenBinding) |tb| {
+        if (!mem.eql(u8, tb.status, "present") and
+            !mem.eql(u8, tb.status, "supported") and
+            !mem.eql(u8, tb.status, "not-supported"))
+        {
+            return error.InvalidTokenBinding;
+        }
+    }
+
     const type_copy = try allocator.dupe(u8, client_data.type);
     errdefer allocator.free(type_copy);
 

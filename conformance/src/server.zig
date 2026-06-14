@@ -29,6 +29,7 @@ pub const Response = struct {
 pub const Credential = struct {
     id: []const u8, // credentialId, base64url
     public_key: []const u8, // COSE public key, base64url
+    sign_count: u32 = 0,
 };
 
 const Session = struct {
@@ -97,13 +98,17 @@ pub const Context = struct {
         }
     }
 
-    fn addCredential(self: *Context, username: []const u8, id: []const u8, public_key: []const u8) !void {
+    fn addCredential(self: *Context, username: []const u8, id: []const u8, public_key: []const u8, sign_count: u32) !void {
         const gop = try self.users.getOrPut(username);
         if (!gop.found_existing) {
             gop.key_ptr.* = try self.gpa.dupe(u8, username);
             gop.value_ptr.* = CredList.init(self.gpa);
         }
-        try gop.value_ptr.append(.{ .id = try self.gpa.dupe(u8, id), .public_key = try self.gpa.dupe(u8, public_key) });
+        try gop.value_ptr.append(.{
+            .id = try self.gpa.dupe(u8, id),
+            .public_key = try self.gpa.dupe(u8, public_key),
+            .sign_count = sign_count,
+        });
     }
 
     fn userCreds(self: *Context, username: []const u8) []const Credential {
@@ -111,8 +116,9 @@ pub const Context = struct {
         return &.{};
     }
 
-    fn findCred(self: *Context, username: []const u8, id: []const u8) ?Credential {
-        for (self.userCreds(username)) |c| {
+    fn findCredMut(self: *Context, username: []const u8, id: []const u8) ?*Credential {
+        const list = self.users.getPtr(username) orelse return null;
+        for (list.items) |*c| {
             if (std.mem.eql(u8, c.id, id)) return c;
         }
         return null;
@@ -268,7 +274,7 @@ pub fn attestationResult(ctx: *Context, a: Allocator, req_json: []const u8) !Res
     }) catch |err| return fail(a, errorMessage(err));
     defer result.deinit(a);
 
-    ctx.addCredential(session.username, result.credential_id, result.public_key) catch return fail(a, "storage error");
+    ctx.addCredential(session.username, result.credential_id, result.public_key, result.sign_count) catch return fail(a, "storage error");
     ctx.consumeSession(challenge);
     return okEmpty(a);
 }
@@ -309,7 +315,7 @@ pub fn assertionResult(ctx: *Context, a: Allocator, req_json: []const u8) !Respo
     defer a.free(challenge);
     const session = ctx.sessions.get(challenge) orelse return fail(a, "unknown or expired challenge");
 
-    const cred = ctx.findCred(session.username, r.id) orelse return fail(a, "unknown credential");
+    const cred = ctx.findCredMut(session.username, r.id) orelse return fail(a, "unknown credential");
 
     const result = passcay.auth.verify(a, .{
         .authenticator_data = r.response.authenticatorData,
@@ -325,6 +331,13 @@ pub fn assertionResult(ctx: *Context, a: Allocator, req_json: []const u8) !Respo
         .enable_sign_count_check = false,
     }) catch |err| return fail(a, errorMessage(err));
     defer result.deinit(a);
+
+    // Clone detection: an authenticator that uses a sign counter (count seen
+    // > 0) must strictly increase it. A counter that stays 0 means no counter.
+    if (cred.sign_count != 0 and result.sign_count <= cred.sign_count) {
+        return fail(a, "sign counter did not increase");
+    }
+    if (result.sign_count > cred.sign_count) cred.sign_count = result.sign_count;
 
     ctx.consumeSession(challenge);
     return okEmpty(a);
