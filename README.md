@@ -18,8 +18,9 @@ Zig version support:
 ## Features
 
 - Passkey WebAuthn registration & authentication (login)
+- **FIDO2 conformant** — passes the official FIDO Alliance FIDO2 Server conformance test suite (100%)
 - **Attestation-less by default** — privacy-preserving and recommended for passkeys (does not affect security)
-- **Optional attestation verification** (opt-in): formats `none`, `packed` (full + self), `fido-u2f`, and `tpm`, with real X.509 certificate-chain validation
+- **Optional attestation verification** (opt-in): `none`, `packed` (full + self), `fido-u2f`, and `tpm` — covering platform authenticators like **Windows Hello** (TPM) and roaming security keys — with real X.509 certificate-chain validation
 - **FIDO Metadata Service (MDS3)** integration: anchor attestation chains by AAGUID, gate on authenticator status reports, and reject BLOBs signed by a CRL-revoked certificate
 - **Broad COSE algorithm support** — ES256/384, secp256k1, Ed25519, RS256/384/512, RS1, PS256/384/512 (see table below)
 - Secure challenge generation
@@ -36,9 +37,8 @@ Zig version support:
 | `-257` / `-258` / `-259` | RS256 / RS384 / RS512 (RSASSA-PKCS1-v1_5) | ✅ |
 | `-37` / `-38` / `-39` | PS256 / PS384 / PS512 (RSASSA-PSS) | ✅ |
 | `-65535` | RS1 (RSASSA-PKCS1-v1_5 SHA-1, legacy) | ✅ |
-| `-36` | ES512 (ECDSA P-521) | ❌ not available in Zig `std.crypto` |
 
-ES256 and RS256 cover 100% of passkey authenticators today; the others support FIDO2 conformance and non-passkey deployments.
+ES256 and RS256 cover virtually all passkey authenticators today; the others broaden coverage for FIDO2 and non-passkey deployments.
 
 ## Dependencies
 
