@@ -28,6 +28,17 @@ zig build          # build the HTTP server (conformance-server)
 zig build run      # start the server on http://localhost:8080
 ```
 
+### Server flags
+
+```
+--metadata <dir>   load MDS3 metadata statements (*.json) as attestation trust anchors
+--origin <url>     expected origin (default http://localhost:8080)
+--rp-id <id>       expected RP ID (default localhost)
+--port <n>         listen port (default 8080)
+--now <unix_secs>  pin certificate time validity; pass `--now $(date +%s)` so
+                   expired-certificate negative tests are rejected
+```
+
 The replay harness exercises ES256 (none) registration + assertion, fido-u2f
 full attestation, and negative cases (unknown challenge, wrong origin, tampered
 signature) — all via `zig build test`, no human involvement.
@@ -38,11 +49,12 @@ Full certification requires the FIDO Alliance desktop tool, which is gated:
 
 1. Request access via the FIDO Alliance Test Tool Access Request form and install
    the desktop application.
-2. In the tool, **Download Server Metadata** and load it into the server's
-   metadata store (wire `attestation.Policy.mds` to a `passcay.mds.Store` built
-   from the downloaded statements — see `passcay.mds.parseStatement`).
-3. `zig build run`, point the tool at `http://localhost:8080`, select Server
-   Tests, and run.
+2. In the tool, **Download Server Metadata**, unzip the statements to a folder
+   (e.g. `./mds`), and start the server with it loaded:
+   ```sh
+   zig build run -- --metadata ./mds --now $(date +%s)
+   ```
+3. Point the tool at `http://localhost:8080`, select Server Tests, and run.
 
 Everything up to step 3 is verifiable offline; step 3 needs the gated tool.
 

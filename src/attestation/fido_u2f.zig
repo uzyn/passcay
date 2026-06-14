@@ -80,8 +80,10 @@ pub fn verify(allocator: Allocator, params: m.VerifyParams, policy: m.Policy) !m
     const ok = x509.verifyData(leaf, -7, signature, vd) catch return m.Error.AttestationAlgorithmMismatch;
     if (!ok) return m.Error.AttestationSignatureInvalid;
 
-    const anchors = try m.resolveAnchors(policy, params.aaguid);
-    x509.verifyChain(allocator, &.{cert_der}, anchors, policy.now_sec) catch
+    // U2F authenticators have no AAGUID, so MDS lookup is keyed on the
+    // attestation certificate (not modeled yet); trust uses policy.roots
+    // directly rather than resolveAnchors.
+    x509.verifyChain(allocator, &.{cert_der}, policy.roots, policy.now_sec) catch
         return m.Error.AttestationChainUntrusted;
 
     return .{ .type = .basic };

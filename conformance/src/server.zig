@@ -24,6 +24,11 @@ pub const Context = struct {
     rp_id: []const u8 = "localhost",
     origin: []const u8 = "http://localhost:8080",
     require_uv: bool = false,
+    /// FIDO metadata store for full attestation (AAGUID trust anchors + status).
+    /// null leaves full attestation in lenient ("no metadata configured") mode.
+    mds: ?*const passcay.mds.Store = null,
+    /// Verification instant for certificate time validity (null = lenient).
+    now_sec: ?i64 = null,
     /// Issued, not-yet-consumed challenges (anti-replay).
     issued: std.StringHashMap(void),
     /// Registered credentials: credentialId(b64url) -> publicKey(b64url).
@@ -154,7 +159,7 @@ pub fn attestationResult(ctx: *Context, a: Allocator, req_json: []const u8) !Res
         .origin = ctx.origin,
         .rp_id = ctx.rp_id,
         .require_user_verification = ctx.require_uv,
-        .attestation = .{ .now_sec = null },
+        .attestation = .{ .now_sec = ctx.now_sec, .mds = ctx.mds },
     }) catch |err| return fail(a, errorMessage(err));
     defer result.deinit(a);
 
