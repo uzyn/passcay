@@ -126,9 +126,9 @@ fn verifyRsaHash(pk: crypto.Certificate.rsa.PublicKey, signature: []const u8, da
         if (signature.len == klen) {
             const sig: [klen]u8 = signature[0..klen].*;
             if (pss) {
-                rsa.PSSSignature.verify(klen, sig, data, pk, Hash) catch return false;
+                rsa.PSSSignature.verify(klen, &sig, data, pk, Hash) catch return false;
             } else {
-                rsa.PKCS1v1_5Signature.verify(klen, sig, data, pk, Hash) catch return false;
+                rsa.PKCS1v1_5Signature.verify(klen, &sig, data, pk, Hash) catch return false;
             }
             return true;
         }
