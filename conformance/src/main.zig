@@ -87,7 +87,7 @@ fn fetchUrl(io: std.Io, gpa: std.mem.Allocator, arena: std.mem.Allocator, url: [
     defer client.deinit();
     var aw: std.Io.Writer.Allocating = .init(arena);
     const res = try client.fetch(.{ .location = .{ .url = url }, .response_writer = &aw.writer });
-    if (@intFromEnum(res.status) != 200) return error.HttpStatusNotOk;
+    if (@backingInt(res.status) != 200) return error.HttpStatusNotOk;
     return aw.written();
 }
 

@@ -261,7 +261,7 @@ fn certIsV3(der: []const u8) bool {
     const c = asn1.parse(der, 0) catch return false;
     const tbs = asn1.parse(der, c.slice.start) catch return false;
     const first = asn1.parse(der, tbs.slice.start) catch return false;
-    if (first.identifier.class != .context_specific or @intFromEnum(first.identifier.tag) != 0) return false;
+    if (first.identifier.class != .context_specific or @backingInt(first.identifier.tag) != 0) return false;
     const ver = asn1.parse(der, first.slice.start) catch return false;
     if (ver.slice.end <= ver.slice.start) return false;
     return der[ver.slice.end - 1] == 2;
@@ -269,12 +269,12 @@ fn certIsV3(der: []const u8) bool {
 
 fn isCa(bc_der: []const u8) bool {
     const seq = asn1.parse(bc_der, 0) catch return false;
-    if (@intFromEnum(seq.identifier.tag) != @intFromEnum(std.crypto.Certificate.der.Tag.sequence)) return false;
+    if (@backingInt(seq.identifier.tag) != @backingInt(std.crypto.Certificate.der.Tag.sequence)) return false;
     var i = seq.slice.start;
     while (i < seq.slice.end) {
         const e = asn1.parse(bc_der, i) catch return false;
         i = e.slice.end;
-        if (e.identifier.class == .universal and @intFromEnum(e.identifier.tag) == 1) { // BOOLEAN
+        if (e.identifier.class == .universal and @backingInt(e.identifier.tag) == 1) { // BOOLEAN
             if (e.slice.end > e.slice.start and bc_der[e.slice.start] != 0x00) return true;
         }
     }
@@ -283,7 +283,7 @@ fn isCa(bc_der: []const u8) bool {
 
 fn unwrapOctetString(der_bytes: []const u8) ?[]const u8 {
     const e = asn1.parse(der_bytes, 0) catch return null;
-    if (@intFromEnum(e.identifier.tag) != 4) return null; // octetstring
+    if (@backingInt(e.identifier.tag) != 4) return null; // octetstring
     return der_bytes[e.slice.start..e.slice.end];
 }
 

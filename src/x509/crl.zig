@@ -114,7 +114,7 @@ pub fn serialNumber(cert_der: []const u8) ![]const u8 {
     const tbs = asn1.parse(cert_der, cert.slice.start) catch return Error.CrlParseFailed;
     var e = asn1.parse(cert_der, tbs.slice.start) catch return Error.CrlParseFailed;
     // Skip the optional [0] version.
-    if (e.identifier.class == .context_specific and @intFromEnum(e.identifier.tag) == 0) {
+    if (e.identifier.class == .context_specific and @backingInt(e.identifier.tag) == 0) {
         e = asn1.parse(cert_der, e.slice.end) catch return Error.CrlParseFailed;
     }
     return cert_der[e.slice.start..e.slice.end];
@@ -130,7 +130,7 @@ pub fn distributionUrl(cert_der: []const u8) ?[]const u8 {
     while (i < ext.len) : (i += 1) {
         if (ext[i] != 0x86) continue;
         const e = asn1.parse(ext, i) catch continue;
-        if (e.identifier.class != .context_specific or @intFromEnum(e.identifier.tag) != 6) continue;
+        if (e.identifier.class != .context_specific or @backingInt(e.identifier.tag) != 6) continue;
         const url = ext[e.slice.start..e.slice.end];
         if (mem.startsWith(u8, url, "http")) return url;
     }
@@ -138,7 +138,7 @@ pub fn distributionUrl(cert_der: []const u8) ?[]const u8 {
 }
 
 fn isUniversal(e: asn1.Element, tag: u5) bool {
-    return e.identifier.class == .universal and @intFromEnum(e.identifier.tag) == tag;
+    return e.identifier.class == .universal and @backingInt(e.identifier.tag) == tag;
 }
 
 /// Compare two big-endian byte strings as integers (leading zeros ignored).

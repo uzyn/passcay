@@ -11,10 +11,12 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        zig-version: [0.16.0, master]
+        zig-version: [0.17.0, master]
 
     name: ${{ matrix.os }} / Zig ${{ matrix.zig-version }}
     runs-on: ${{ matrix.os }}
+    # The nightly can break in ways a release-targeted branch cannot fix.
+    continue-on-error: ${{ matrix.zig-version == 'master' }}
 
     steps:
       - name: Checkout
@@ -32,4 +34,4 @@ jobs:
         run: zig build test --summary all
 
       - name: Check formatting
-        run: zig fmt --check .
+        run: zig fmt --exclude zig-pkg --check .

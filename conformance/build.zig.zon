@@ -2,12 +2,12 @@
     .name = .conformance,
     .version = "0.1.0",
     .fingerprint = 0xe81515e7170e9611,
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.0",
     .dependencies = .{
         .passcay = .{ .path = ".." },
         .httpz = .{
-            .url = "https://github.com/karlseguin/http.zig/archive/refs/heads/master.tar.gz",
-            .hash = "httpz-0.0.0-PNVzrJrbCACyokt2AARAG7Ul7h7xlZxL7BYAdpsAs1_-",
+            .url = "https://github.com/karlseguin/http.zig/archive/e8272bfd5727aade0dcee3e2aba6c50f57c374b6.tar.gz",
+            .hash = "httpz-0.0.0-PNVzrNAXCQDHb-rRH2jq07A3Ekv3GS6XOTkiqZJtKeqv",
         },
     },
     .paths = .{
