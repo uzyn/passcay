@@ -172,7 +172,7 @@ fn verifyRsaHash(pk: Certificate.rsa.PublicKey, sig: []const u8, data: []const u
     inline for (.{ 256, 384, 512 }) |klen| {
         if (sig.len == klen) {
             const s: [klen]u8 = sig[0..klen].*;
-            Certificate.rsa.PKCS1v1_5Signature.verify(klen, s, data, pk, Hash) catch return false;
+            Certificate.rsa.PKCS1v1_5Signature.verify(klen, &s, data, pk, Hash) catch return false;
             return true;
         }
     }
@@ -195,7 +195,7 @@ fn verifyRsaPssHash(pk: Certificate.rsa.PublicKey, sig: []const u8, data: []cons
     inline for (.{ 256, 384, 512 }) |klen| {
         if (sig.len == klen) {
             const s: [klen]u8 = sig[0..klen].*;
-            Certificate.rsa.PSSSignature.verify(klen, s, data, pk, Hash) catch return false;
+            Certificate.rsa.PSSSignature.verify(klen, &s, data, pk, Hash) catch return false;
             return true;
         }
     }

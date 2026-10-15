@@ -49,7 +49,7 @@ pub fn verifyWithCoseKey(allocator: Allocator, cose_key_bytes: []const u8, signa
     const key = try passcay.cbor.parseCoseKey(allocator, cose_key_bytes);
     defer key.deinit(allocator);
 
-    const alg_id: i32 = if (key.algorithm) |a| @intFromEnum(a) else return VerifyError.UnsupportedAlgorithm;
+    const alg_id: i32 = if (key.algorithm) |a| @backingInt(a) else return VerifyError.UnsupportedAlgorithm;
     const desc = passcay.alg.describe(alg_id) orelse return VerifyError.UnsupportedAlgorithm;
     if (!desc.supported) return VerifyError.UnsupportedAlgorithm;
 
@@ -126,9 +126,9 @@ fn verifyRsaHash(pk: crypto.Certificate.rsa.PublicKey, signature: []const u8, da
         if (signature.len == klen) {
             const sig: [klen]u8 = signature[0..klen].*;
             if (pss) {
-                rsa.PSSSignature.verify(klen, sig, data, pk, Hash) catch return false;
+                rsa.PSSSignature.verify(klen, &sig, data, pk, Hash) catch return false;
             } else {
-                rsa.PKCS1v1_5Signature.verify(klen, sig, data, pk, Hash) catch return false;
+                rsa.PKCS1v1_5Signature.verify(klen, &sig, data, pk, Hash) catch return false;
             }
             return true;
         }

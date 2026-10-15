@@ -222,20 +222,20 @@ pub fn parseCoseKey(allocator: Allocator, key_cbor: []const u8) !CoseKeyParamete
                 1 => { // kty (key type)
                     if (pair.value.getType() != .Int) continue;
                     const kty_int = pair.value.int().?;
-                    key_type = @enumFromInt(@as(i32, @intCast(kty_int)));
+                    key_type = @fromBackingInt(@intCast(@as(i32, @intCast(kty_int))));
                 },
                 3 => { // alg (algorithm)
                     if (pair.value.getType() != .Int) continue;
                     // Record any COSE algorithm; support is enforced downstream.
                     const alg_val = std.math.cast(i32, pair.value.int().?) orelse continue;
-                    algorithm = @enumFromInt(alg_val);
+                    algorithm = @fromBackingInt(@intCast(alg_val));
                 },
                 -1 => { // crv (curve) or n (RSA modulus) depending on key type
                     if (key_type) |kt| {
                         if (kt == .EC2 or kt == .OKP) {
                             if (pair.value.getType() == .Int) {
                                 const crv_int = pair.value.int().?;
-                                curve = @enumFromInt(@as(i32, @intCast(crv_int)));
+                                curve = @fromBackingInt(@intCast(@as(i32, @intCast(crv_int))));
                             }
                         } else if (kt == .RSA) {
                             if (pair.value.getType() == .ByteString) {

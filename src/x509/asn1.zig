@@ -15,7 +15,7 @@ pub fn parse(bytes: []const u8, index: u32) !Element {
 }
 
 fn tagNum(e: Element) u5 {
-    return @intFromEnum(e.identifier.tag);
+    return @backingInt(e.identifier.tag);
 }
 
 /// Find an X.509v3 extension by its OID content bytes (the bytes inside the
@@ -50,7 +50,7 @@ pub fn findExtension(cert_der: []const u8, oid_content: []const u8) !?[]const u8
 
         // Next is either critical BOOLEAN (skip) or extnValue OCTET STRING.
         var value_elem = try parse(cert_der, oid_elem.slice.end);
-        if (value_elem.identifier.class == .universal and tagNum(value_elem) == @intFromEnum(der.Tag.boolean)) {
+        if (value_elem.identifier.class == .universal and tagNum(value_elem) == @backingInt(der.Tag.boolean)) {
             value_elem = try parse(cert_der, value_elem.slice.end);
         }
 

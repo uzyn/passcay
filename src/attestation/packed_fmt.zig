@@ -167,12 +167,12 @@ fn coordEq(field: []const u8, coord: []const u8) bool {
 /// Parse a BasicConstraints extension value, returning whether cA is TRUE.
 fn isCa(bc_der: []const u8) bool {
     const seq = x509.asn1.parse(bc_der, 0) catch return false;
-    if (@intFromEnum(seq.identifier.tag) != @intFromEnum(std.crypto.Certificate.der.Tag.sequence)) return false;
+    if (@backingInt(seq.identifier.tag) != @backingInt(std.crypto.Certificate.der.Tag.sequence)) return false;
     var i = seq.slice.start;
     while (i < seq.slice.end) {
         const e = x509.asn1.parse(bc_der, i) catch return false;
         i = e.slice.end;
-        if (e.identifier.class == .universal and @intFromEnum(e.identifier.tag) == 1) { // BOOLEAN
+        if (e.identifier.class == .universal and @backingInt(e.identifier.tag) == 1) { // BOOLEAN
             if (e.slice.end > e.slice.start and bc_der[e.slice.start] != 0x00) return true;
         }
     }
@@ -182,6 +182,6 @@ fn isCa(bc_der: []const u8) bool {
 /// Unwrap a DER OCTET STRING, returning its content (the inner 16-byte AAGUID).
 fn unwrapOctetString(der_bytes: []const u8) ?[]const u8 {
     const e = x509.asn1.parse(der_bytes, 0) catch return null;
-    if (@intFromEnum(e.identifier.tag) != 4) return null; // octetstring
+    if (@backingInt(e.identifier.tag) != 4) return null; // octetstring
     return der_bytes[e.slice.start..e.slice.end];
 }

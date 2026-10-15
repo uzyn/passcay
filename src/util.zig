@@ -93,7 +93,7 @@ pub fn parseClientDataJson(allocator: Allocator, client_data_json_b64: []const u
 }
 
 pub fn hasFlag(flags: u8, flag: types.AuthenticatorDataFlag) bool {
-    return (flags & @intFromEnum(flag)) != 0;
+    return (flags & @backingInt(flag)) != 0;
 }
 
 test "base64url encoding/decoding" {

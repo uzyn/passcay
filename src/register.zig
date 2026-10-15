@@ -178,7 +178,7 @@ pub fn verify(allocator: mem.Allocator, input: RegVerifyInput, expectations: Reg
     // Validate the credential public key uses a supported algorithm and has
     // the components its scheme requires.
     const cred_alg_id: i32 = if (key_params.algorithm) |a|
-        @intFromEnum(a)
+        @backingInt(a)
     else switch (key_params.key_type) {
         .EC2 => if (key_params.curve == .P256) @as(i32, -7) else return error.UnsupportedKeyType,
         .RSA => @as(i32, -257),
